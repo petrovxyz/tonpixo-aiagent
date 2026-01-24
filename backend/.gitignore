@@ -1,0 +1,23 @@
+# Environment variables
+.env
+.env.example
+
+# Local exports and temporary files
+exports/
+*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venc/
+.venv/
+env/
+.env/
+bin/
+lib64/
+lib/
+include/
+share/
+Pipfile.lock
+poetry.lock
