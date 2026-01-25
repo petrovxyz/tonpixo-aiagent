@@ -227,7 +227,7 @@ function ChatContent() {
                     <div className="flex items-center gap-2 pointer-events-auto">
                         <button
                             onClick={() => router.push("/discover")}
-                            className="flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 mt-16 cursor-pointer"
+                            className="flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 mt-20 cursor-pointer"
                         >
                             <FontAwesomeIcon icon={faArrowLeft} className="text-xl" />
                         </button>

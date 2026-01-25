@@ -4,21 +4,21 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
+import { ImageSlideshow } from "@/components/ImageSlideshow"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faMagnifyingGlass, faArrowUp, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons"
-import { faMessage } from "@fortawesome/free-regular-svg-icons"
+import { faMagnifyingGlass, faArrowUp } from "@fortawesome/free-solid-svg-icons"
 
 // --- Data ---
 const QA_ITEMS: QAItem[] = [
   {
     id: 'what-is-tonpixo',
-    question: "What is tonpixo?",
+    question: "What is Tonpixo?",
     answer: 'Tonpixo is an AI-powered agent that turns TON wallet activity into a natural conversation. Simply interact with data by asking direct questions. Its your personal financial assistant that instantly analyzes blockchain history and provides clear, human-readable answers.',
     image: "/images/what_is_tonpixo.webp"
   },
   {
-    id: 'how-it-works',
-    question: "How it works?",
+    id: 'how-tonpixo-works',
+    question: "How Tonpixo works?",
     answer: "The process is seamless and completely safe. Tonpixo scans the entire transaction history to build a knowledge base for the wallet. Once the data is processed, just start asking questions, and Tonpixo will fetch the specific details, presenting them as easy-to-understand insights.",
     image: "/images/how_it_works.webp"
   }
@@ -55,13 +55,16 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center gap-4 w-full"
       >
-        {/* Headline */}
-        <div className="text-center">
-          <h1 className="text-3xl tracking-tight leading-12">
-            <span className="font-medium">Give me<FontAwesomeIcon icon={faWandMagicSparkles} className="text-[22px] ml-2 mr-1" />,</span><br /><span className="text-black font-bold"><img src="/toncoin-ton-logo.svg" alt="Toncoin Logo" className="mb-2 mr-1 w-7.5 h-7.5 inline" />TON</span><span className="font-medium"> address</span><br />
-            <span className="font-medium">and <span className="text-white/80 font-bold"><FontAwesomeIcon icon={faMessage} className="text-[22px] mr-1" />ask questions</span>.</span>
-          </h1>
-        </div>
+        {/* Slideshow */}
+        <ImageSlideshow
+          slides={QA_ITEMS.map(item => ({
+            id: item.id,
+            image: item.image,
+            title: item.question,
+            description: item.answer
+          }))}
+          onSlideClick={(index) => setActiveQA(QA_ITEMS[index])}
+        />
 
         {/* Input Area */}
         <div className="w-full max-w-lg relative group">
@@ -84,15 +87,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Q&A List */}
+        {/* Subscribe Card */}
         <div className="flex flex-col gap-3 w-full max-w-lg">
-          {QA_ITEMS.map((item) => (
-            <SuggestionChip
-              key={item.id}
-              text={item.question}
-              onClick={() => setActiveQA(item)}
-            />
-          ))}
+          <SuggestionChip
+            text="Telegram channel"
+            onClick={() => window.open("https://t.me/tonpixo", "_blank")}
+          />
         </div>
 
       </motion.div>
