@@ -4,6 +4,7 @@ import uuid
 import json
 from fastapi import FastAPI
 from pydantic import BaseModel
+from mangum import Mangum
 
 app = FastAPI()
 sqs = boto3.client('sqs')
@@ -38,3 +39,5 @@ async def get_status(job_id: str):
         return {"status": "NOT_FOUND"}
     
     return response['Item']
+
+handler = Mangum(app)
