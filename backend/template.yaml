@@ -2,6 +2,16 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: FastAPI on AWS Lambda
 
+Parameters:
+  TonApiKey:
+    Type: String
+    Description: "API Key from tonapi.io"
+    NoEcho: true
+  TelegramBotToken:
+    Type: String
+    Description: "Token from BotFather"
+    NoEcho: true
+
 Globals:
   Function:
     Timeout: 30
@@ -48,6 +58,8 @@ Resources:
           JOBS_TABLE: !Ref JobsTable
           USERS_TABLE: !Ref UsersTable
           JOBS_QUEUE_URL: !Ref JobsQueue
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
@@ -74,7 +86,7 @@ Resources:
         Variables:
           JOBS_TABLE: !Ref JobsTable
           DATA_BUCKET: !Ref DataBucket
-          TONAPI_KEY: ""
+          TONAPI_KEY: !Ref TonApiKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable

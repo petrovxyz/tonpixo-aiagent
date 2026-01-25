@@ -11,7 +11,6 @@ load_dotenv()
 
 # Configuration
 LABELS_FILE = "labels/labels.json"
-WALLET_ADDRESS = os.getenv("DEFAULT_WALLET_ADDRESS", "")
 API_KEY = os.getenv("TONAPI_KEY", "")
 
 
@@ -677,38 +676,3 @@ def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, 
             break
     
     return pd.DataFrame(all_data)
-
-
-
-if __name__ == "__main__":
-    # Run
-    # Load labels first
-    labels_map = load_labels()
-    print(f"Loaded {len(labels_map)} addresses from labels.")
-
-    df = fetch_history(WALLET_ADDRESS, API_KEY, labels_map=labels_map)
-
-    if not df.empty:
-        print(f"\n--- Detailed Asset History ({len(df)} total actions) ---")
-        
-        # Sort by datetime
-        df = df.sort_values(by='datetime', ascending=False)
-        
-        # Display summary
-        print("\n📊 Summary by Asset:")
-        asset_summary = df.groupby('asset').agg({
-            'amount': ['count', 'sum']
-        }).round(4)
-        asset_summary.columns = ['Transactions', 'Total Amount']
-        print(asset_summary.to_string())
-        
-        print("\n📝 Recent Transactions:")
-        # Show more columns for better visibility
-        display_cols = ['datetime', 'type', 'asset', 'amount', 'direction', 'label', 'category', 'sender', 'status']
-        print(df[display_cols].head(20).to_string())
-        
-        # Save to CSV
-        df.to_csv("ton_asset_history.csv", index=False)
-        print(f"\n✅ Saved {len(df)} transactions to ton_asset_history.csv")
-    else:
-        print("No transactions found.")
