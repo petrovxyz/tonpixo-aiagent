@@ -33,7 +33,7 @@ const SuggestionChip = ({ text, onClick }: { text: string; onClick: () => void }
   >
     <span>{text}</span>
     <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover:bg-white/30 group-hover:scale-110">
-      <FontAwesomeIcon icon={faArrowUp} className="text-[12px] transform rotate-45 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+      <FontAwesomeIcon icon={faArrowUp} className="text-[12px] transform rotate-45" />
     </div>
   </button>
 )
@@ -49,14 +49,14 @@ export default function Home() {
   }
 
   return (
-    <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto">
+    <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto flex-1 justify-center">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 w-full"
+        className="flex flex-col items-center gap-4 w-full"
       >
         {/* Headline */}
-        <div className="text-left px-2">
+        <div className="text-center">
           <h1 className="text-3xl tracking-tight leading-12">
             <span className="font-medium">Give me<FontAwesomeIcon icon={faWandMagicSparkles} className="text-[22px] ml-2 mr-1" />,</span><br /><span className="text-black font-bold"><img src="/toncoin-ton-logo.svg" alt="Toncoin Logo" className="mb-2 mr-1 w-7.5 h-7.5 inline" />TON</span><span className="font-medium"> address</span><br />
             <span className="font-medium">and <span className="text-white/80 font-bold"><FontAwesomeIcon icon={faMessage} className="text-[22px] mr-1" />ask questions</span>.</span>
@@ -86,7 +86,7 @@ export default function Home() {
         </div>
 
         {/* Q&A List */}
-        <div className="flex flex-col gap-3 w-full max-w-lg pb-32">
+        <div className="flex flex-col gap-3 w-full max-w-lg">
           {QA_ITEMS.map((item) => (
             <SuggestionChip
               key={item.id}
