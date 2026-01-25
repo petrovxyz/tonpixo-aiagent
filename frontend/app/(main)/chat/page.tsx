@@ -82,8 +82,8 @@ function ChatContent() {
             const response = await axios.get(`${apiUrl}/api/status/${jobId}`)
             const data = response.data
 
-            if (data.status === "processing") {
-                setCount(data.count)
+            if (data.status === "processing" || data.status === "queued") {
+                setCount(data.count || 0)
                 setTimeout(() => pollStatus(jobId), 1000)
             } else if (data.status === "success") {
                 setIsLoading(false)
