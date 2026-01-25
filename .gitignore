@@ -24,7 +24,6 @@ samconfig.toml
 venc/
 env/
 bin/
-lib/
 lib64/
 include/
 share/
