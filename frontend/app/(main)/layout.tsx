@@ -9,7 +9,7 @@ import { useState } from "react"
 
 import { UIProvider, useUI } from "@/context/UIContext"
 
-const ROUTES = ["/discover", "/favs", "/settings", "/chat"]
+const ROUTES = ["/explore", "/favs", "/settings", "/chat"]
 
 const variants = {
     enter: (direction: number) => ({

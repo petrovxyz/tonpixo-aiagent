@@ -3,12 +3,12 @@
 import { usePathname, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCompass, faHeart, faGear } from "@fortawesome/free-solid-svg-icons"
+import { faCube, faStar, faGear } from "@fortawesome/free-solid-svg-icons"
 import { cn } from "@/lib/utils"
 
 const NAV_ITEMS = [
-    { id: "discover", label: "Discover", icon: faCompass, path: "/discover" },
-    { id: "favs", label: "Favs", icon: faHeart, path: "/favs" },
+    { id: "explore", label: "Explore", icon: faCube, path: "/explore" },
+    { id: "favs", label: "Favs", icon: faStar, path: "/favs" },
     { id: "settings", label: "Settings", icon: faGear, path: "/settings" },
 ]
 

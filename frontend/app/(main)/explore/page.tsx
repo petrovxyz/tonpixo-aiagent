@@ -13,7 +13,7 @@ const QA_ITEMS: QAItem[] = [
   {
     id: 'what-is-tonpixo',
     question: "What is Tonpixo?",
-    answer: 'Tonpixo is an AI-powered agent that turns TON wallet activity into a natural conversation. Simply interact with data by asking direct questions. Its your personal financial assistant that instantly analyzes blockchain history and provides clear, human-readable answers.',
+    answer: 'Tonpixo is an AI-powered agent that turns TON wallet activity into a natural conversation. Simply interact with data by asking direct questions. Its your personal financial assistant that analyzes blockchain history and provides clear, human-readable answers.',
     image: "/images/what_is_tonpixo.webp"
   },
   {

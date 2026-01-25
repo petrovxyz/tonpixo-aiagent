@@ -132,7 +132,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
                                 onClick={() => onSlideClick?.(index)}
-                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-white/30 active:scale-95 transition-all duration-200 rounded-full px-5 py-2"
+                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-[#0088CC] active:scale-95 transition-all duration-200 rounded-full px-5 py-2 cursor-pointer"
                             >
                                 <span>{slides[index].title}</span>
                                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
@@ -147,7 +147,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
             {/* Progress Indicators */}
             <div className="absolute top-4 left-4 right-4 flex gap-2 z-10 pointer-events-none">
                 {slides.map((slide, i) => (
-                    <div key={slide.id} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
+                    <div key={slide.id} className="h-1 flex-1 bg-black/10 rounded-full overflow-hidden">
                         <AnimatePresence mode="wait">
                             {i === index && !isDragging && (
                                 <motion.div

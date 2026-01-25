@@ -228,10 +228,10 @@ function ChatContent() {
                 <div className="max-w-3xl mx-auto w-full px-4">
                     <div className="flex items-center gap-2 pointer-events-auto">
                         <button
-                            onClick={() => router.push("/discover")}
+                            onClick={() => router.push("/search")}
                             className={cn(
                                 "flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer",
-                                isMobile ? "mt-20" : "mt-10"
+                                isMobile ? "mt-24" : "mt-10"
                             )}
                         >
                             <FontAwesomeIcon icon={faArrowLeft} className="text-xl" />
