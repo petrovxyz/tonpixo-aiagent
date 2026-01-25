@@ -29,7 +29,7 @@ const QA_ITEMS: QAItem[] = [
 const SuggestionChip = ({ text, onClick }: { text: string; onClick: () => void }) => (
   <button
     onClick={onClick}
-    className="w-full text-left px-6 py-4 rounded-3xl bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-md text-white text-base font-medium transition-all duration-200 transform active:scale-[0.98] flex justify-between items-center group shadow-lg cursor-pointer"
+    className="w-full text-left px-6 py-4 rounded-3xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-base font-medium transition-all duration-200 transform active:scale-[0.98] flex justify-between items-center group shadow-lg cursor-pointer"
   >
     <span>{text}</span>
     <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover:bg-white/30">
@@ -68,7 +68,7 @@ export default function Home() {
 
         {/* Input Area */}
         <div className="w-full max-w-lg relative group">
-          <div className="absolute inset-0 bg-white/20 rounded-full blur-md group-hover:blur-lg transition-all duration-500 opacity-50" />
+          <div className="absolute inset-0 bg-white/20 rounded-full transition-all duration-500 opacity-50" />
           <div className="relative bg-white/10 border-2 border-white/20 hover:border-white/40 rounded-full p-2 pl-6 flex items-center transition-all shadow-xl">
             <input
               type="text"

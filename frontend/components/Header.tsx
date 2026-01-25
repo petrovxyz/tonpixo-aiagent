@@ -23,7 +23,7 @@ export function Header({ className }: { className?: string }) {
 
             <motion.div
                 layout
-                className="z-20 pointer-events-auto bg-white/10 flex justify-center backdrop-blur-sm rounded-full py-2 border-2 border-white/20 inset-shadow-sm inset-shadow-white/30"
+                className="z-20 pointer-events-auto bg-[#4FC3F7] flex justify-center rounded-full py-2 border-2 border-white/20 inset-shadow-sm inset-shadow-white/30"
             >
                 <div className="flex items-center gap-2 text-[26px] font-extrabold font-sans tracking-tight px-6">
                     <div className="w-8 h-8">

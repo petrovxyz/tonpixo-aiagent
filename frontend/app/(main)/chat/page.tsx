@@ -230,7 +230,7 @@ function ChatContent() {
                         <button
                             onClick={() => router.push("/explore")}
                             className={cn(
-                                "flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer",
+                                "flex items-center justify-center w-14 h-14 bg-[#4FC3F7] border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer",
                                 isMobile ? "mt-24" : "mt-10"
                             )}
                         >
@@ -246,8 +246,8 @@ function ChatContent() {
             <div className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">
                 <div className="max-w-2xl mx-auto w-full p-6 pb-10 md:pb-12 pointer-events-auto">
                     <div className="relative group">
-                        <div className="absolute inset-0 bg-white/5 rounded-full group-focus-within:bg-white/10 transition-all" />
-                        <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-full p-2 flex items-center shadow-2xl transition-all focus-within:bg-white/20 focus-within:border-white/40 ring-1 ring-white/10 inset-shadow-sm inset-shadow-white/30">
+                        <div className="absolute inset-0 rounded-full" />
+                        <div className="relative bg-[#4FC3F7] border border-white/20 rounded-full p-2 flex items-center shadow-2xl transition-all ring-1 ring-white/10 inset-shadow-sm inset-shadow-white/30">
                             <input
                                 ref={inputRef}
                                 type="text"
