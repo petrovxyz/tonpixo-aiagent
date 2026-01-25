@@ -14,6 +14,8 @@
 # Backend (Python)
 ############################
 __pycache__/
+.aws-sam/
+samconfig.toml
 *.py[cod]
 *$py.class
 

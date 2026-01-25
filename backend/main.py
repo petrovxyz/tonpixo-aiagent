@@ -1,3 +1,4 @@
+from mangum import Mangum
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -55,19 +56,14 @@ def run_fetch_task(job_id, address, api_key):
 
 @app.post("/api/generate")
 async def generate_history(request: GenerateRequest):
-    job_id = str(uuid.uuid4())
     api_key = request.api_key or os.getenv("TONAPI_KEY")
     
-    if not api_key:
-        raise HTTPException(status_code=400, detail="API key is required. Provide it in the request or set TONAPI_KEY env var.")
-
-    jobs[job_id] = {"status": "processing", "count": 0}
+    df = fetch_history(request.address, api_key, labels_map=labels_map)
     
-    # Run in background thread
-    thread = threading.Thread(target=run_fetch_task, args=(job_id, request.address, api_key))
-    thread.start()
+    csv_data = df.to_csv(index=False)
     
-    return {"job_id": job_id}
+    from fastapi.responses import Response
+    return Response(content=csv_data, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=history.csv"})
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str):
@@ -85,3 +81,5 @@ async def download_history(job_id: str):
         return FileResponse(filepath, filename=f"ton_history_{job_id}.csv", media_type='text/csv')
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+handler = Mangum(app)
