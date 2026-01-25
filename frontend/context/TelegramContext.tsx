@@ -15,6 +15,9 @@ declare global {
                 };
                 ready: () => void;
                 expand: () => void;
+                requestFullscreen?: () => void;
+                disableVerticalSwipes?: () => void;
+                isVerticalSwipesEnabled?: boolean;
             };
         };
     }
@@ -65,14 +68,39 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                 console.log("[TG] Initializing Telegram context...")
                 const { initDataRaw, initData } = retrieveLaunchParams() as any
 
+                // UI Configuration - Always run this if Telegram WebApp is available
+                if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                    const webApp = window.Telegram.WebApp;
+                    webApp.ready();
+
+                    try {
+                        webApp.expand();
+                        console.log("[TG] Expanded Web App");
+
+                        if (webApp.requestFullscreen) {
+                            webApp.requestFullscreen();
+                            console.log("[TG] Requested Fullscreen");
+                        }
+
+                        if (webApp.disableVerticalSwipes) {
+                            webApp.disableVerticalSwipes();
+                            console.log("[TG] Disabled Vertical Swipes");
+                        } else if (typeof webApp.isVerticalSwipesEnabled !== 'undefined') {
+                            webApp.isVerticalSwipesEnabled = false;
+                            console.log("[TG] Disabled Vertical Swipes (legacy)");
+                        }
+                    } catch (e) {
+                        console.error("[TG] Error configuring Web App UI:", e);
+                    }
+                }
+
                 let raw = initDataRaw;
                 let data = initData;
 
+                // Fallback for data retrieval if SDK failed
                 if (!raw && typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                    console.log("[TG] Fallback to window.Telegram.WebApp");
+                    console.log("[TG] Fallback to window.Telegram.WebApp for data");
                     const webApp = window.Telegram.WebApp;
-                    webApp.ready();
-                    webApp.expand();
 
                     raw = webApp.initData;
                     const unsafeUser = webApp.initDataUnsafe?.user;
