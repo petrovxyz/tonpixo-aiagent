@@ -104,8 +104,24 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                         }
                     }
                 } else {
+                    // No user data - use mock in development, show error in production
                     console.warn("[TG] No user data in initData")
-                    setError("Could not retrieve user data from Telegram.")
+
+                    if (process.env.NODE_ENV === "development") {
+                        console.warn("[TG] Using mock data for development (no Telegram environment)")
+                        const mockUser: TelegramUser = {
+                            id: 123456789,
+                            first_name: "Test",
+                            last_name: "User",
+                            username: "testuser",
+                            language_code: "en",
+                            photo_url: "https://placehold.co/100x100"
+                        }
+                        setUser(mockUser)
+                        setInitDataRaw("query_id=mock&user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22Test%22%7D")
+                    } else {
+                        setError("Could not retrieve user data from Telegram.")
+                    }
                 }
             } catch (error: any) {
                 console.error("[TG] Initialization error:", error)
