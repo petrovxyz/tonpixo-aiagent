@@ -17,6 +17,7 @@ interface TelegramContextType {
     user: TelegramUser | null
     initDataRaw: string | null
     isLoading: boolean
+    error: string | null
     login: () => Promise<void>
 }
 
@@ -26,6 +27,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<TelegramUser | null>(null)
     const [initDataRaw, setInitDataRaw] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     const login = async () => {
         if (!initDataRaw) return
@@ -66,6 +68,8 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                             initData: initDataRaw
                         })
                     }
+                } else {
+                    setError("Could not retrieve user data from Telegram.")
                 }
             } catch (error) {
                 if (process.env.NODE_ENV === "development") {
@@ -80,6 +84,9 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                     }
                     setUser(mockUser)
                     setInitDataRaw("query_id=mock&user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22Test%22%7D")
+                } else {
+                    console.error("Telegram environment not detected:", error)
+                    setError("This application is only available as a Telegram Mini App.")
                 }
             } finally {
                 setIsLoading(false)
@@ -94,6 +101,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
             user,
             initDataRaw,
             isLoading,
+            error,
             login
         }}>
             {children}
