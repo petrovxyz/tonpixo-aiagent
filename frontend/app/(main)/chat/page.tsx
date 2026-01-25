@@ -8,6 +8,7 @@ import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft } from "@fortawesome/f
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { cn } from "@/lib/utils"
+import { useTelegram } from "@/context/TelegramContext"
 
 // Message Type Definition
 interface Message {
@@ -56,6 +57,7 @@ function ChatContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const addressParam = searchParams.get("address")
+    const { isMobile } = useTelegram()
 
     const [messages, setMessages] = useState<Array<Message>>([])
     const [inputValue, setInputValue] = useState("")
@@ -227,7 +229,10 @@ function ChatContent() {
                     <div className="flex items-center gap-2 pointer-events-auto">
                         <button
                             onClick={() => router.push("/discover")}
-                            className="flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 mt-20 cursor-pointer"
+                            className={cn(
+                                "flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer",
+                                isMobile ? "mt-20" : "mt-10"
+                            )}
                         >
                             <FontAwesomeIcon icon={faArrowLeft} className="text-xl" />
                         </button>

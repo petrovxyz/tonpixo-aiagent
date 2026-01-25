@@ -38,6 +38,8 @@ interface TelegramContextType {
     initDataRaw: string | null
     isLoading: boolean
     error: string | null
+    platform: string | null
+    isMobile: boolean
     login: () => Promise<void>
 }
 
@@ -48,6 +50,8 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     const [initDataRaw, setInitDataRaw] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [platform, setPlatform] = useState<string | null>(null)
+    const [isMobile, setIsMobile] = useState(false)
 
     const login = async () => {
         if (!initDataRaw) return
@@ -79,14 +83,17 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                         console.log("[TG] Expanded Web App");
 
                         // Only request fullscreen on mobile platforms
-                        const platform = webApp.platform || "";
-                        const isMobile = ["android", "android_x", "ios"].includes(platform);
+                        const detectedPlatform = webApp.platform || "";
+                        const detectedIsMobile = ["android", "android_x", "ios"].includes(detectedPlatform);
 
-                        if (isMobile && webApp.requestFullscreen) {
+                        setPlatform(detectedPlatform);
+                        setIsMobile(detectedIsMobile);
+
+                        if (detectedIsMobile && webApp.requestFullscreen) {
                             webApp.requestFullscreen();
-                            console.log(`[TG] Requested Fullscreen (Platform: ${platform})`);
+                            console.log(`[TG] Requested Fullscreen (Platform: ${detectedPlatform})`);
                         } else {
-                            console.log(`[TG] Skipped Fullscreen (Platform: ${platform})`);
+                            console.log(`[TG] Skipped Fullscreen (Platform: ${detectedPlatform})`);
                         }
 
                         if (webApp.disableVerticalSwipes) {
@@ -233,6 +240,8 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
             initDataRaw,
             isLoading,
             error,
+            platform,
+            isMobile,
             login
         }}>
             {children}

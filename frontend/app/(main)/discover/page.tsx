@@ -80,7 +80,7 @@ export default function Home() {
             />
             <button
               onClick={() => startSearch(address)}
-              className="ml-2 bg-white text-[#3CA9F3] hover:bg-gray-100 w-12 h-12 rounded-full font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center shrink-0 cursor-pointer"
+              className="ml-2 bg-white text-[#0098EA] hover:bg-gray-100 w-12 h-12 rounded-full font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center shrink-0 cursor-pointer"
             >
               <FontAwesomeIcon icon={faMagnifyingGlass} />
             </button>

@@ -132,7 +132,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
                                 onClick={() => onSlideClick?.(index)}
-                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-white/20 hover:bg-white/30 active:scale-95 transition-all duration-200 rounded-full px-5 py-2 backdrop-blur-md"
+                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-white/30 active:scale-95 transition-all duration-200 rounded-full px-5 py-2"
                             >
                                 <span>{slides[index].title}</span>
                                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">

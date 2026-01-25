@@ -6,12 +6,12 @@ import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
 
 export function Header({ className }: { className?: string }) {
-    const { user } = useTelegram()
+    const { user, isMobile } = useTelegram()
     const pathname = usePathname()
     const showUser = pathname !== "/chat" && pathname !== "/" && user?.photo_url
 
     return (
-        <div className={cn("flex items-center justify-center gap-3 relative mt-20", className)}>
+        <div className={cn("flex items-center justify-center gap-3 relative", isMobile ? "mt-24" : "mt-10", className)}>
             {showUser && (
                 <motion.div
                     layout
