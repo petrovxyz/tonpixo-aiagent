@@ -59,6 +59,7 @@ Resources:
         Variables:
           JOBS_TABLE: !Ref JobsTable
           DATA_BUCKET: !Ref DataBucket
+          TONAPI_KEY: ""
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
