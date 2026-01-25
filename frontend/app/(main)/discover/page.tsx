@@ -74,7 +74,6 @@ export default function Home() {
               onKeyDown={(e) => e.key === "Enter" && startSearch(address)}
               placeholder="Enter TON address..."
               className="bg-transparent border-none outline-none text-lg w-full text-white placeholder:text-white/50 font-medium"
-              autoFocus
             />
             <button
               onClick={() => startSearch(address)}

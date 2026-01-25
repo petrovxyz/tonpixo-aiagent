@@ -18,6 +18,7 @@ declare global {
                 requestFullscreen?: () => void;
                 disableVerticalSwipes?: () => void;
                 isVerticalSwipesEnabled?: boolean;
+                platform: string;
             };
         };
     }
@@ -77,9 +78,15 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                         webApp.expand();
                         console.log("[TG] Expanded Web App");
 
-                        if (webApp.requestFullscreen) {
+                        // Only request fullscreen on mobile platforms
+                        const platform = webApp.platform || "";
+                        const isMobile = ["android", "android_x", "ios"].includes(platform);
+
+                        if (isMobile && webApp.requestFullscreen) {
                             webApp.requestFullscreen();
-                            console.log("[TG] Requested Fullscreen");
+                            console.log(`[TG] Requested Fullscreen (Platform: ${platform})`);
+                        } else {
+                            console.log(`[TG] Skipped Fullscreen (Platform: ${platform})`);
                         }
 
                         if (webApp.disableVerticalSwipes) {

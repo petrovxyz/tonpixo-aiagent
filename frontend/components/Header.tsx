@@ -11,7 +11,7 @@ export function Header({ className }: { className?: string }) {
     const showUser = pathname !== "/chat" && pathname !== "/" && user?.photo_url
 
     return (
-        <div className={cn("flex items-center justify-center gap-3 relative mt-10", className)}>
+        <div className={cn("flex items-center justify-center gap-3 relative mt-16", className)}>
             {showUser && (
                 <motion.div
                     layout
