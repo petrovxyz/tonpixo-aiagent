@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import Preloader from "@/components/Preloader";
 import { UIProvider } from "@/context/UIContext";
+import { TelegramProvider } from "@/context/TelegramContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,10 +42,12 @@ export default function RootLayout({
       >
         {/* Persistent Background to prevent black blinks */}
         <div className="fixed inset-0 bg-gradient-to-br from-[#4FC3F7] to-[#29B6F6] -z-10" />
-        <UIProvider>
-          <Preloader />
-          {children}
-        </UIProvider>
+        <TelegramProvider>
+          <UIProvider>
+            <Preloader />
+            {children}
+          </UIProvider>
+        </TelegramProvider>
       </body>
     </html>
   );

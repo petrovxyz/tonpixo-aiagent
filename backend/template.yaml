@@ -13,6 +13,18 @@ Resources:
     Properties:
       VisibilityTimeout: 300
 
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-users"
+      AttributeDefinitions:
+        - AttributeName: telegram_id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: telegram_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
   JobsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -34,10 +46,13 @@ Resources:
       Environment:
         Variables:
           JOBS_TABLE: !Ref JobsTable
+          USERS_TABLE: !Ref UsersTable
           JOBS_QUEUE_URL: !Ref JobsQueue
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt JobsQueue.QueueName
       Events:
