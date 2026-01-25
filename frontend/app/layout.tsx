@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono, Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import Preloader from "@/components/Preloader";
@@ -42,6 +43,7 @@ export default function RootLayout({
       >
         {/* Persistent Background to prevent black blinks */}
         <div className="fixed inset-0 bg-gradient-to-br from-[#4FC3F7] to-[#29B6F6] -z-10" />
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <TelegramProvider>
           <UIProvider>
             <Preloader />

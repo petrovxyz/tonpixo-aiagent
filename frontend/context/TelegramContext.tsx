@@ -4,6 +4,22 @@ import React, { createContext, useContext, useEffect, useState } from "react"
 import { retrieveLaunchParams } from "@tma.js/sdk"
 import axios from "axios"
 
+declare global {
+    interface Window {
+        Telegram?: {
+            WebApp?: {
+                initData: string;
+                initDataUnsafe: {
+                    user?: any;
+                    [key: string]: any;
+                };
+                ready: () => void;
+                expand: () => void;
+            };
+        };
+    }
+}
+
 interface TelegramUser {
     id: number
     first_name: string
@@ -49,13 +65,39 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                 console.log("[TG] Initializing Telegram context...")
                 const { initDataRaw, initData } = retrieveLaunchParams() as any
 
-                console.log("[TG] initDataRaw:", initDataRaw ? "present" : "missing")
-                console.log("[TG] initData:", initData ? "present" : "missing")
+                let raw = initDataRaw;
+                let data = initData;
 
-                if (initData && initData.user) {
-                    setInitDataRaw(initDataRaw || null)
+                if (!raw && typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                    console.log("[TG] Fallback to window.Telegram.WebApp");
+                    const webApp = window.Telegram.WebApp;
+                    webApp.ready();
+                    webApp.expand();
 
-                    const telegramUser = initData.user
+                    raw = webApp.initData;
+                    const unsafeUser = webApp.initDataUnsafe?.user;
+
+                    if (unsafeUser) {
+                        data = {
+                            user: {
+                                id: unsafeUser.id,
+                                firstName: unsafeUser.first_name,
+                                lastName: unsafeUser.last_name,
+                                username: unsafeUser.username,
+                                languageCode: unsafeUser.language_code,
+                                photoUrl: unsafeUser.photo_url
+                            }
+                        };
+                    }
+                }
+
+                console.log("[TG] initDataRaw:", raw ? "present" : "missing")
+                console.log("[TG] initData:", data ? "present" : "missing")
+
+                if (data && data.user) {
+                    setInitDataRaw(raw || null)
+
+                    const telegramUser = data.user
                     console.log("[TG] User from Telegram:", telegramUser)
 
                     setUser({
@@ -67,13 +109,13 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                         photo_url: telegramUser.photoUrl
                     })
 
-                    if (initDataRaw) {
+                    if (raw) {
                         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
                         console.log("[TG] Sending login request to:", `${apiUrl}/api/login`)
 
                         try {
                             const response = await axios.post(`${apiUrl}/api/login`, {
-                                initData: initDataRaw
+                                initData: raw
                             }, {
                                 timeout: 10000, // 10 second timeout
                                 headers: {
