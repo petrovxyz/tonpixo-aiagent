@@ -29,7 +29,7 @@ const QA_ITEMS: QAItem[] = [
 const SuggestionChip = ({ text, onClick }: { text: string; onClick: () => void }) => (
   <button
     onClick={onClick}
-    className="w-full text-left px-6 py-4 rounded-3xl bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-md text-white text-base font-medium transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex justify-between items-center group shadow-lg"
+    className="w-full text-left px-6 py-4 rounded-3xl bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-md text-white text-base font-medium transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex justify-between items-center group shadow-lg cursor-pointer"
   >
     <span>{text}</span>
     <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover:bg-white/30 group-hover:scale-110">
@@ -78,7 +78,7 @@ export default function Home() {
             />
             <button
               onClick={() => startSearch(address)}
-              className="ml-2 bg-white text-[#3CA9F3] hover:bg-gray-100 w-12 h-12 rounded-full font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center shrink-0"
+              className="ml-2 bg-white text-[#3CA9F3] hover:bg-gray-100 w-12 h-12 rounded-full font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center shrink-0 cursor-pointer"
             >
               <FontAwesomeIcon icon={faMagnifyingGlass} />
             </button>

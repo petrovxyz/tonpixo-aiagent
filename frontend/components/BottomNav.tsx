@@ -26,7 +26,7 @@ export function BottomNav() {
                             key={item.id}
                             onClick={() => router.push(item.path)}
                             className={cn(
-                                "flex-1 flex flex-col items-center justify-center py-3 px-1 relative z-10 transition-colors duration-300",
+                                "flex-1 flex flex-col items-center justify-center py-3 px-1 relative z-10 transition-colors duration-300 cursor-pointer",
                                 isActive ? "text-white" : "text-white/60 hover:text-white"
                             )}
                         >

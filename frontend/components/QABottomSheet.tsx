@@ -71,7 +71,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                 {/* Close Button (Absolute) */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-40 w-8 h-8 flex items-center justify-center bg-black/5 hover:bg-black/10 rounded-full text-gray-500 transition-colors"
+                    className="absolute top-4 right-4 z-40 w-8 h-8 flex items-center justify-center bg-black/5 hover:bg-black/10 rounded-full text-gray-500 transition-colors cursor-pointer"
                 >
                     <FontAwesomeIcon icon={faTimes} size="sm" />
                 </button>
@@ -95,7 +95,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                         {/* Check Button */}
                         <button
                             onClick={onClose}
-                            className="w-full bg-[#0098EA] text-white rounded-full mt-2 py-4 font-bold text-lg hover:bg-[#0088CC] transition-all shadow-lg active:scale-95 transform duration-200"
+                            className="w-full bg-[#0098EA] text-white rounded-full mt-2 py-4 font-bold text-lg hover:bg-[#0088CC] transition-all shadow-lg active:scale-95 transform duration-200 cursor-pointer"
                         >
                             Understand
                         </button>
