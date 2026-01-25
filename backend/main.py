@@ -31,40 +31,152 @@ class GenerateRequest(BaseModel):
 class LoginRequest(BaseModel):
     initData: str
 
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "ok", 
+        "message": "Server is running",
+        "timestamp": str(uuid.uuid4())
+    }
+
+
+def validate_telegram_init_data(init_data: str, bot_token: str) -> tuple[bool, dict | None, str]:
+    """
+    Validate Telegram Mini App initData according to official documentation.
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+    
+    Returns: (is_valid, parsed_data, error_message)
+    """
+    import hmac
+    import hashlib
+    from urllib.parse import parse_qs, unquote
+    import time
+    
+    try:
+        # Parse the init data
+        parsed = {}
+        for pair in init_data.split('&'):
+            if '=' in pair:
+                key, value = pair.split('=', 1)
+                parsed[key] = unquote(value)
+        
+        # Extract the hash
+        received_hash = parsed.pop('hash', None)
+        if not received_hash:
+            return False, None, "No hash found in initData"
+        
+        # Create the data check string (sorted alphabetically)
+        data_check_string = '\n'.join(
+            f'{key}={value}' 
+            for key, value in sorted(parsed.items())
+        )
+        
+        # Create secret key: HMAC-SHA256 of bot token with "WebAppData" as key
+        secret_key = hmac.new(
+            b'WebAppData',
+            bot_token.encode(),
+            hashlib.sha256
+        ).digest()
+        
+        # Calculate expected hash
+        expected_hash = hmac.new(
+            secret_key,
+            data_check_string.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Compare hashes
+        if not hmac.compare_digest(expected_hash, received_hash):
+            return False, None, "Invalid signature"
+        
+        # Validate auth_date (prevent replay attacks - 1 hour expiry)
+        auth_date = parsed.get('auth_date')
+        if auth_date:
+            auth_timestamp = int(auth_date)
+            current_timestamp = int(time.time())
+            if current_timestamp - auth_timestamp > 3600:  # 1 hour
+                return False, None, "Auth data expired"
+        
+        return True, parsed, ""
+        
+    except Exception as e:
+        return False, None, f"Validation error: {str(e)}"
+
+
 @app.post("/api/login")
 async def login(request: LoginRequest):
     from urllib.parse import parse_qs
     import json
+    from datetime import datetime
+    
+    print(f"[LOGIN] Received login request")
+    print(f"[LOGIN] initData length: {len(request.initData)}")
     
     try:
-        # Parse initData
-        parsed_data = parse_qs(request.initData)
-        user_json = parsed_data.get('user', [None])[0]
+        # Get bot token from environment
+        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+        
+        # Skip validation in development mode if no bot token
+        skip_validation = False
+        if not bot_token or bot_token == 'YOUR_BOT_TOKEN_HERE':
+            print("[LOGIN] WARNING: No TELEGRAM_BOT_TOKEN configured!")
+            print("[LOGIN] Skipping signature validation (DEVELOPMENT MODE ONLY)")
+            skip_validation = True
+        
+        # Validate initData signature (CRITICAL SECURITY CHECK)
+        if not skip_validation:
+            is_valid, validated_data, error_msg = validate_telegram_init_data(
+                request.initData, 
+                bot_token
+            )
+            
+            if not is_valid:
+                print(f"[LOGIN] SECURITY: Invalid initData - {error_msg}")
+                return {"status": "error", "message": f"Authentication failed: {error_msg}"}
+            
+            print("[LOGIN] Signature validation successful")
+            user_json = validated_data.get('user')
+        else:
+            # Development fallback - parse without validation
+            parsed_data = parse_qs(request.initData)
+            user_json = parsed_data.get('user', [None])[0]
         
         if not user_json:
+            print("[LOGIN] ERROR: No user data found in initData")
             return {"status": "error", "message": "No user data found"}
             
         user_data = json.loads(user_json)
+        print(f"[LOGIN] User data: {user_data}")
+        
         telegram_id = user_data.get('id')
         
         if not telegram_id:
-             return {"status": "error", "message": "No telegram_id found"}
+            print("[LOGIN] ERROR: No telegram_id found in user data")
+            return {"status": "error", "message": "No telegram_id found"}
              
-        # Upsert user
-        users_table.put_item(Item={
-            'telegram_id': telegram_id,
-            'first_name': user_data.get('first_name', ''),
-            'last_name': user_data.get('last_name', ''),
-            'username': user_data.get('username', ''),
-            'language_code': user_data.get('language_code', ''),
-            'photo_url': user_data.get('photo_url', ''),
-            'last_login': str(uuid.uuid4()) # simple timestamp placeholder or similar
-        })
+        # Upsert user (with error handling for local dev without AWS)
+        try:
+            users_table.put_item(Item={
+                'telegram_id': telegram_id,
+                'first_name': user_data.get('first_name', ''),
+                'last_name': user_data.get('last_name', ''),
+                'username': user_data.get('username', ''),
+                'language_code': user_data.get('language_code', ''),
+                'photo_url': user_data.get('photo_url', ''),
+                'last_login': datetime.utcnow().isoformat()
+            })
+            print(f"[LOGIN] User {telegram_id} saved to DynamoDB")
+        except Exception as db_error:
+            print(f"[LOGIN] WARNING: Could not save to DynamoDB (local dev?): {db_error}")
+            # Continue anyway - this is just for tracking
         
+        print(f"[LOGIN] SUCCESS: User {telegram_id} logged in")
         return {"status": "ok", "user": user_data}
         
     except Exception as e:
-        print(f"Login error: {e}")
+        import traceback
+        print(f"[LOGIN] ERROR: {e}")
+        print(f"[LOGIN] Traceback: {traceback.format_exc()}")
         return {"status": "error", "message": str(e)}
 
 

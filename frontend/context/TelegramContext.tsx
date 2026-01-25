@@ -46,12 +46,17 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
         const init = async () => {
             setIsLoading(true)
             try {
+                console.log("[TG] Initializing Telegram context...")
                 const { initDataRaw, initData } = retrieveLaunchParams() as any
+
+                console.log("[TG] initDataRaw:", initDataRaw ? "present" : "missing")
+                console.log("[TG] initData:", initData ? "present" : "missing")
 
                 if (initData && initData.user) {
                     setInitDataRaw(initDataRaw || null)
 
                     const telegramUser = initData.user
+                    console.log("[TG] User from Telegram:", telegramUser)
 
                     setUser({
                         id: telegramUser.id,
@@ -64,14 +69,47 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
 
                     if (initDataRaw) {
                         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
-                        await axios.post(`${apiUrl}/api/login`, {
-                            initData: initDataRaw
-                        })
+                        console.log("[TG] Sending login request to:", `${apiUrl}/api/login`)
+
+                        try {
+                            const response = await axios.post(`${apiUrl}/api/login`, {
+                                initData: initDataRaw
+                            }, {
+                                timeout: 10000, // 10 second timeout
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            })
+                            console.log("[TG] Login response:", response.data)
+
+                            if (response.data.status === "error") {
+                                console.error("[TG] Login failed:", response.data.message)
+                                setError(`Login failed: ${response.data.message}`)
+                            }
+                        } catch (loginError: any) {
+                            console.error("[TG] Login request failed:", loginError)
+
+                            if (loginError.code === 'ECONNABORTED') {
+                                setError("Connection timeout. Please check your network connection.")
+                            } else if (loginError.response) {
+                                // Server responded with error
+                                setError(`Server error: ${loginError.response.status} - ${loginError.response.data?.message || loginError.message}`)
+                            } else if (loginError.request) {
+                                // Request made but no response
+                                setError("No response from server. Please check if the backend is running.")
+                            } else {
+                                // Other errors
+                                setError(`Connection failed: ${loginError.message}`)
+                            }
+                        }
                     }
                 } else {
+                    console.warn("[TG] No user data in initData")
                     setError("Could not retrieve user data from Telegram.")
                 }
-            } catch (error) {
+            } catch (error: any) {
+                console.error("[TG] Initialization error:", error)
+
                 if (process.env.NODE_ENV === "development") {
                     console.warn("Telegram environment not detected. Using mock data for development.")
                     const mockUser: TelegramUser = {
