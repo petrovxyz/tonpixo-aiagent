@@ -228,7 +228,7 @@ function ChatContent() {
                 <div className="max-w-3xl mx-auto w-full px-4">
                     <div className="flex items-center gap-2 pointer-events-auto">
                         <button
-                            onClick={() => router.push("/search")}
+                            onClick={() => router.push("/explore")}
                             className={cn(
                                 "flex items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-full text-black hover:bg-white/20 transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer",
                                 isMobile ? "mt-24" : "mt-10"
@@ -262,7 +262,7 @@ function ChatContent() {
                             <button
                                 onClick={handleSend}
                                 disabled={!inputValue.trim() || (isLoading && messages.some(m => m.content === "collecting"))}
-                                className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white text-[#3CA9F3] rounded-full hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg"
+                                className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white hover:bg-gray-100 text-[#0098EA] rounded-full active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg cursor-pointer"
                             >
                                 <FontAwesomeIcon icon={faArrowUp} className="text-xl" />
                             </button>

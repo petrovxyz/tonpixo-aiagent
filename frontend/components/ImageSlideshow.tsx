@@ -99,7 +99,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
     }
 
     return (
-        <div className="relative w-full aspect-[16/9] overflow-hidden rounded-3xl group isolate touch-pan-y">
+        <div className="relative w-full aspect-[16/9] overflow-hidden rounded-3xl group isolate touch-pan-y cursor-grab">
             <AnimatePresence initial={false} custom={direction} mode="popLayout">
                 <motion.div
                     key={slides[index].id}
@@ -132,7 +132,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
                                 onClick={() => onSlideClick?.(index)}
-                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-[#0088CC] active:scale-95 transition-all duration-200 rounded-full px-5 py-2 cursor-pointer"
+                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-[#0088CC]/90 active:scale-95 transition-all duration-200 rounded-full px-5 py-2 cursor-pointer"
                             >
                                 <span>{slides[index].title}</span>
                                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
