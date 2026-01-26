@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef, Suspense } from "react"
+import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft } from "@fortawesome/free-solid-svg-icons"
+import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { cn } from "@/lib/utils"
@@ -16,9 +16,42 @@ interface Message {
     role: "user" | "agent"
     content: React.ReactNode
     timestamp: Date
+    isStreaming?: boolean
 }
 
-const MessageBubble = ({ role, content, timestamp }: { role: "user" | "agent"; content: React.ReactNode; timestamp: Date }) => (
+// Streaming message component that shows tokens as they arrive
+const StreamingMessage = ({
+    content,
+    isThinking
+}: {
+    content: string
+    isThinking: boolean
+}) => (
+    <div className="flex flex-col gap-2">
+        {isThinking && (
+            <div className="flex items-center gap-2 text-white/60 text-sm">
+                <FontAwesomeIcon icon={faGear} className="animate-spin text-xs" />
+                <span className="italic">Analyzing data...</span>
+            </div>
+        )}
+        <div className="whitespace-pre-wrap break-words [hyphens:auto] [word-break:normal]">
+            {content}
+            {isThinking && <span className="animate-pulse">▊</span>}
+        </div>
+    </div>
+)
+
+const MessageBubble = ({
+    role,
+    content,
+    timestamp,
+    isStreaming = false
+}: {
+    role: "user" | "agent"
+    content: React.ReactNode
+    timestamp: Date
+    isStreaming?: boolean
+}) => (
     <motion.div
         initial={{ opacity: 0, y: 10, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -37,17 +70,20 @@ const MessageBubble = ({ role, content, timestamp }: { role: "user" | "agent"; c
             "relative max-w-[85%] md:max-w-[75%] px-5 py-4 text-[16px] font-medium leading-relaxed shadow-lg transition-all",
             role === "user"
                 ? "bg-white text-gray-900 rounded-3xl rounded-br-sm"
-                : "bg-white/10 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5"
+                : "bg-white/10 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
+            isStreaming && "min-h-[60px]"
         )}>
             <div className="whitespace-pre-wrap break-words [hyphens:auto] [word-break:normal]">
                 {content}
             </div>
-            <div className={cn(
-                "text-[10.5px] opacity-70 mt-1.5 font-bold tracking-tight",
-                role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
-            )}>
-                {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
+            {!isStreaming && (
+                <div className={cn(
+                    "text-[10.5px] opacity-70 mt-1.5 font-bold tracking-tight",
+                    role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
+                )}>
+                    {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+            )}
         </div>
     </motion.div>
 )
@@ -64,11 +100,14 @@ function ChatContent() {
     const [isLoading, setIsLoading] = useState(false)
     const [count, setCount] = useState<number>(0)
     const [jobId, setJobId] = useState<string | null>(null)
+    const [streamingContent, setStreamingContent] = useState("")
+    const [isAnalyzing, setIsAnalyzing] = useState(false)
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const hasStartedRef = useRef(false)
     const inputRef = useRef<HTMLInputElement>(null)
+    const abortControllerRef = useRef<AbortController | null>(null)
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -76,7 +115,16 @@ function ChatContent() {
 
     useEffect(() => {
         scrollToBottom()
-    }, [messages])
+    }, [messages, streamingContent])
+
+    // Cleanup abort controller on unmount
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort()
+            }
+        }
+    }, [])
 
     // Existing Polling Logic
     const pollStatus = async (jobId: string) => {
@@ -144,21 +192,161 @@ function ChatContent() {
         }
     }
 
-    const addMessage = (role: "user" | "agent", content: React.ReactNode) => {
+    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false) => {
         setMessages(prev => [
-            ...prev.filter(m => m.content !== "collecting"),
+            ...prev.filter(m => m.content !== "collecting" && m.content !== "thinking"),
             {
                 id: Math.random().toString(36).substr(2, 9),
                 role,
                 content,
-                timestamp: new Date()
+                timestamp: new Date(),
+                isStreaming
             }
         ])
     }
 
     const removeLoadingMessage = () => {
-        setMessages(prev => prev.filter(m => m.content !== "collecting"))
+        setMessages(prev => prev.filter(m => m.content !== "collecting" && m.content !== "thinking"))
     }
+
+    // Stream chat with SSE
+    const streamChat = useCallback(async (question: string) => {
+        // Use separate streaming URL for Lambda Function URL (supports SSE properly)
+        // Falls back to regular API URL for local development
+        const streamUrl = process.env.NEXT_PUBLIC_STREAM_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+
+        // Abort any existing stream
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+        }
+
+        abortControllerRef.current = new AbortController()
+
+        setIsLoading(true)
+        setStreamingContent("")
+        setIsAnalyzing(false)
+
+        // Add a streaming message placeholder
+        const streamingMsgId = "streaming-" + Date.now()
+        setMessages(prev => [...prev.filter(m => !m.isStreaming), {
+            id: streamingMsgId,
+            role: "agent",
+            content: "",
+            timestamp: new Date(),
+            isStreaming: true
+        }])
+
+        try {
+            const response = await fetch(`${streamUrl}/api/chat/stream`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    job_id: jobId,
+                    question: question
+                }),
+                signal: abortControllerRef.current.signal
+            })
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
+            }
+
+            const reader = response.body?.getReader()
+            if (!reader) {
+                throw new Error("No reader available")
+            }
+
+            const decoder = new TextDecoder()
+            let accumulatedContent = ""
+
+            while (true) {
+                const { done, value } = await reader.read()
+
+                if (done) break
+
+                const text = decoder.decode(value, { stream: true })
+                const lines = text.split("\n")
+
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        try {
+                            const data = JSON.parse(line.slice(6))
+
+                            if (data.type === "token") {
+                                accumulatedContent += data.content
+                                setStreamingContent(accumulatedContent)
+
+                                // Update the streaming message
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, content: <StreamingMessage content={accumulatedContent} isThinking={isAnalyzing} /> }
+                                        : m
+                                ))
+                            } else if (data.type === "tool_start") {
+                                setIsAnalyzing(true)
+                            } else if (data.type === "tool_end") {
+                                setIsAnalyzing(false)
+                            } else if (data.type === "done") {
+                                // Finalize the message
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, content: accumulatedContent, isStreaming: false, timestamp: new Date() }
+                                        : m
+                                ))
+                                setStreamingContent("")
+                            } else if (data.type === "error") {
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, content: data.content, isStreaming: false, timestamp: new Date() }
+                                        : m
+                                ))
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON
+                        }
+                    }
+                }
+            }
+
+            // If we got content but no "done" event, finalize anyway
+            if (accumulatedContent) {
+                setMessages(prev => prev.map(m =>
+                    m.id === streamingMsgId
+                        ? { ...m, content: accumulatedContent, isStreaming: false, timestamp: new Date() }
+                        : m
+                ))
+            }
+
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log('Stream aborted')
+                return
+            }
+
+            console.error('Streaming error:', err)
+
+            // Fallback to non-streaming API
+            try {
+                const response = await axios.post(`${apiUrl}/api/chat`, {
+                    job_id: jobId,
+                    question: question
+                })
+
+                setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
+                addMessage("agent", response.data.answer || "I couldn't get an answer.")
+            } catch (fallbackErr) {
+                setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
+                addMessage("agent", "I encountered an error talking to the agent.")
+            }
+        } finally {
+            setIsLoading(false)
+            setStreamingContent("")
+            setIsAnalyzing(false)
+        }
+    }, [jobId])
 
     const handleSend = async () => {
         if (!inputValue.trim()) return
@@ -179,32 +367,8 @@ function ChatContent() {
             return
         }
 
-        // We have a job ID, so ask the agent
-        setIsLoading(true)
-        setMessages(prev => [...prev.filter(m => m.content !== "thinking"), {
-            id: "thinking-" + Date.now(),
-            role: "agent",
-            content: "thinking",
-            timestamp: new Date()
-        }])
-
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
-            const response = await axios.post(`${apiUrl}/api/chat`, {
-                job_id: jobId,
-                question: text
-            })
-
-            setMessages(prev => prev.filter(m => m.content !== "thinking"))
-            addMessage("agent", response.data.answer || "I couldn't get an answer.")
-
-        } catch (err) {
-            setMessages(prev => prev.filter(m => m.content !== "thinking"))
-            addMessage("agent", "I encountered an error talking to the agent.")
-            console.error(err)
-        } finally {
-            setIsLoading(false)
-        }
+        // Use streaming for chat responses
+        await streamChat(text)
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -253,7 +417,12 @@ function ChatContent() {
                                         </div>
                                     } />
                                 ) : (
-                                    <MessageBubble role={msg.role} content={msg.content} timestamp={msg.timestamp} />
+                                    <MessageBubble
+                                        role={msg.role}
+                                        content={msg.content}
+                                        timestamp={msg.timestamp}
+                                        isStreaming={msg.isStreaming}
+                                    />
                                 )}
                             </div>
                         ))}

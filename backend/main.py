@@ -2,11 +2,13 @@ import boto3
 import os
 import uuid
 import json
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mangum import Mangum
-from agent import process_chat
+from agent import process_chat, process_chat_stream
 
 app = FastAPI()
 app.add_middleware(
@@ -217,5 +219,57 @@ async def chat(request: ChatRequest):
     except Exception as e:
         print(f"[CHAT] Error: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """Stream chat responses using Server-Sent Events."""
+    print(f"[CHAT-STREAM] Received question for job {request.job_id}: {request.question}")
+    
+    async def generate():
+        try:
+            async for event in process_chat_stream(request.job_id, request.question):
+                event_type = event.get("type", "")
+                
+                if event_type == "token":
+                    # Stream individual tokens
+                    data = json.dumps({"type": "token", "content": event["content"]})
+                    yield f"data: {data}\n\n"
+                
+                elif event_type == "tool_start":
+                    # Agent is using a tool
+                    data = json.dumps({"type": "tool_start", "tool": event["tool"]})
+                    yield f"data: {data}\n\n"
+                
+                elif event_type == "tool_end":
+                    # Tool execution completed
+                    data = json.dumps({"type": "tool_end", "tool": event["tool"]})
+                    yield f"data: {data}\n\n"
+                
+                elif event_type == "done":
+                    # Streaming complete
+                    data = json.dumps({"type": "done"})
+                    yield f"data: {data}\n\n"
+                
+                elif event_type == "error":
+                    # Error occurred
+                    data = json.dumps({"type": "error", "content": event["content"]})
+                    yield f"data: {data}\n\n"
+                    
+        except Exception as e:
+            print(f"[CHAT-STREAM] Error: {e}")
+            data = json.dumps({"type": "error", "content": str(e)})
+            yield f"data: {data}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 
 handler = Mangum(app)

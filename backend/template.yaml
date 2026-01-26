@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: FastAPI on AWS Lambda
+Description: FastAPI on AWS Lambda with LangGraph Agent
 
 Parameters:
   TonApiKey:
@@ -53,6 +53,8 @@ Resources:
       CodeUri: .
       Handler: main.handler
       Runtime: python3.11
+      Timeout: 120
+      MemorySize: 1024
       Environment:
         Variables:
           JOBS_TABLE: !Ref JobsTable
@@ -74,7 +76,19 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+                - cloudwatch:PutMetricData
               Resource: "*"
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - "*"
+          AllowHeaders:
+            - "*"
+        InvokeMode: RESPONSE_STREAM
       Events:
         ApiEvent:
           Type: Api
@@ -112,5 +126,8 @@ Resources:
 
 Outputs:
   ApiUrl:
-    Description: "API Gateway endpoint URL"
+    Description: "API Gateway endpoint URL (use for non-streaming requests)"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  FunctionUrl:
+    Description: "Lambda Function URL (use for streaming chat)"
+    Value: !GetAtt FastApiFunctionUrl.FunctionUrl

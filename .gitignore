@@ -21,6 +21,7 @@ samconfig.toml
 
 # virtualenvs
 .venv/
+venv/
 venc/
 env/
 bin/
