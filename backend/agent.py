@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langchain_community.callbacks import get_bedrock_anthropic_callback
+from langchain_community.callbacks.manager import get_bedrock_anthropic_callback
 
 # Configuration
 BUCKET_NAME = os.environ.get('DATA_BUCKET')
@@ -391,9 +391,28 @@ async def process_chat_stream(job_id: str, question: str):
                 
                 if kind == "on_chat_model_stream":
                     # Stream token-by-token output
-                    content = event["data"]["chunk"].content
+                    chunk = event["data"]["chunk"]
+                    content = chunk.content
+                    
+                    # Handle different content formats from Claude
                     if content:
-                        yield {"type": "token", "content": content}
+                        text_content = ""
+                        
+                        # Content can be a string or a list of content blocks
+                        if isinstance(content, str):
+                            text_content = content
+                        elif isinstance(content, list):
+                            # Extract text from content blocks
+                            for block in content:
+                                if isinstance(block, str):
+                                    text_content += block
+                                elif isinstance(block, dict) and block.get("type") == "text":
+                                    text_content += block.get("text", "")
+                                elif hasattr(block, "text"):
+                                    text_content += block.text
+                        
+                        if text_content:
+                            yield {"type": "token", "content": text_content}
                 
                 elif kind == "on_tool_start":
                     # Tool is starting
@@ -413,3 +432,4 @@ async def process_chat_stream(job_id: str, question: str):
         import traceback
         traceback.print_exc()
         yield {"type": "error", "content": f"I encountered an error: {str(e)}"}
+

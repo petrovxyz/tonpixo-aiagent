@@ -26,20 +26,36 @@ const StreamingMessage = ({
 }: {
     content: string
     isThinking: boolean
-}) => (
-    <div className="flex flex-col gap-2">
-        {isThinking && (
-            <div className="flex items-center gap-2 text-white/60 text-sm">
-                <FontAwesomeIcon icon={faGear} className="animate-spin text-xs" />
-                <span className="italic">Analyzing data...</span>
-            </div>
-        )}
-        <div className="whitespace-pre-wrap break-words [hyphens:auto] [word-break:normal]">
-            {content}
-            {isThinking && <span className="animate-pulse">▊</span>}
+}) => {
+    const showThinkingIndicator = isThinking || !content
+
+    return (
+        <div className="flex flex-col gap-2">
+            {showThinkingIndicator && !content && (
+                <div className="flex items-center gap-2 text-white/60">
+                    <FontAwesomeIcon icon={faGear} className="animate-spin text-sm" />
+                    <span className="italic animate-pulse">
+                        {isThinking ? "Analyzing data..." : "Thinking..."}
+                    </span>
+                </div>
+            )}
+            {content && (
+                <>
+                    {isThinking && (
+                        <div className="flex items-center gap-2 text-white/60 text-sm">
+                            <FontAwesomeIcon icon={faGear} className="animate-spin text-xs" />
+                            <span className="italic">Analyzing data...</span>
+                        </div>
+                    )}
+                    <div className="whitespace-pre-wrap break-words [hyphens:auto] [word-break:normal]">
+                        {content}
+                        <span className="animate-pulse">▊</span>
+                    </div>
+                </>
+            )}
         </div>
-    </div>
-)
+    )
+}
 
 const MessageBubble = ({
     role,
