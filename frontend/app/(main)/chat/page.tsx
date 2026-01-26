@@ -63,6 +63,7 @@ function ChatContent() {
     const [inputValue, setInputValue] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [count, setCount] = useState<number>(0)
+    const [jobId, setJobId] = useState<string | null>(null)
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -89,6 +90,7 @@ function ChatContent() {
                 setTimeout(() => pollStatus(jobId), 1000)
             } else if (data.status === "success") {
                 setIsLoading(false)
+                setJobId(jobId)
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center font-bold text-white gap-1">
@@ -164,14 +166,44 @@ function ChatContent() {
         setInputValue("")
         addMessage("user", text)
 
-        if (text.length > 20 && (text.startsWith("EQ") || text.startsWith("UQ") || text.startsWith("0:"))) {
-            startSearch(text)
-        } else {
-            setIsLoading(true)
-            setTimeout(() => {
-                setIsLoading(false)
-                addMessage("agent", "I'm ready to analyze any TON address. Please paste one here!")
-            }, 800)
+        if (!jobId) {
+            if (text.length > 20 && (text.startsWith("EQ") || text.startsWith("UQ") || text.startsWith("0:"))) {
+                startSearch(text)
+            } else {
+                setIsLoading(true)
+                setTimeout(() => {
+                    setIsLoading(false)
+                    addMessage("agent", "I'm ready to analyze any TON address. Please paste one here!")
+                }, 800)
+            }
+            return
+        }
+
+        // We have a job ID, so ask the agent
+        setIsLoading(true)
+        setMessages(prev => [...prev.filter(m => m.content !== "thinking"), {
+            id: "thinking-" + Date.now(),
+            role: "agent",
+            content: "thinking",
+            timestamp: new Date()
+        }])
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const response = await axios.post(`${apiUrl}/api/chat`, {
+                job_id: jobId,
+                question: text
+            })
+
+            setMessages(prev => prev.filter(m => m.content !== "thinking"))
+            addMessage("agent", response.data.answer || "I couldn't get an answer.")
+
+        } catch (err) {
+            setMessages(prev => prev.filter(m => m.content !== "thinking"))
+            addMessage("agent", "I encountered an error talking to the agent.")
+            console.error(err)
+        } finally {
+            setIsLoading(false)
         }
     }
 
@@ -211,6 +243,13 @@ function ChatContent() {
                                                 <span className="animate-pulse font-semibold">Scanning TON Blockchain...</span>
                                                 {count > 0 && <span className="text-xs text-white/50">{count} transactions detected</span>}
                                             </div>
+                                        </div>
+                                    } />
+                                ) : msg.content === "thinking" ? (
+                                    <MessageBubble role="agent" timestamp={msg.timestamp} content={
+                                        <div className="flex items-center gap-2 text-white/80">
+                                            <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                            <span className="animate-pulse italic">Thinking...</span>
                                         </div>
                                     } />
                                 ) : (

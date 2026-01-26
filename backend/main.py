@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from mangum import Mangum
+from agent import process_chat
 
 app = FastAPI()
 app.add_middleware(
@@ -30,6 +31,10 @@ class GenerateRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     initData: str
+
+class ChatRequest(BaseModel):
+    job_id: str
+    question: str
 
 @app.get("/api/health")
 async def health_check():
@@ -202,5 +207,15 @@ async def get_status(job_id: str):
         return {"status": "NOT_FOUND"}
     
     return response['Item']
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    print(f"[CHAT] Received question for job {request.job_id}: {request.question}")
+    try:
+        answer = process_chat(request.job_id, request.question)
+        return {"answer": answer, "status": "success"}
+    except Exception as e:
+        print(f"[CHAT] Error: {e}")
+        return {"status": "error", "message": str(e)}
 
 handler = Mangum(app)
