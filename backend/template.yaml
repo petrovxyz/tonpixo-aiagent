@@ -28,6 +28,11 @@ Globals:
   Function:
     Timeout: 30
     MemorySize: 256
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 
 Resources:
   JobsQueue:
@@ -62,11 +67,11 @@ Resources:
   FastApiFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .
-      Handler: main.handler
-      Runtime: python3.11
+      PackageType: Image
       Timeout: 120
       MemorySize: 1024
+      Architectures:
+        - x86_64
       Environment:
         Variables:
           JOBS_TABLE: !Ref JobsTable
@@ -79,6 +84,8 @@ Resources:
           LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
           LANGFUSE_HOST: !Ref LangfuseHost
           LANGFUSE_TRACING_ENVIRONMENT: !Ref "AWS::StackName"
+          # Matplotlib config - use /tmp for cache (Lambda requirement)
+          MPLCONFIGDIR: /tmp/matplotlib
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
@@ -112,11 +119,15 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: latest
 
   WorkerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .
+      CodeUri: ./worker
       Handler: worker.lambda_handler
       Runtime: python3.11
       Timeout: 300
