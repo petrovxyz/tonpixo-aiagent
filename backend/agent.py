@@ -10,7 +10,8 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langchain_community.callbacks.manager import get_bedrock_anthropic_callback
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 
 # Configuration
 BUCKET_NAME = os.environ.get('DATA_BUCKET')
@@ -26,42 +27,46 @@ BEDROCK_RETRY_CONFIG = Config(
 )
 
 s3 = boto3.client('s3')
-cw = boto3.client('cloudwatch')
 bedrock_runtime = boto3.client('bedrock-runtime', config=BEDROCK_RETRY_CONFIG)
+
+# Initialize Langfuse client (uses environment variables)
+# LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_HOST
+langfuse = get_client()
 
 # Global dataframe cache for the current session
 _dataframe_cache: dict[str, pd.DataFrame] = {}
 
 
-def log_metrics_to_cloudwatch(cb, job_id):
-    """Send cost and tokens to AWS CloudWatch"""
+def create_langfuse_handler() -> LangfuseCallbackHandler:
+    """
+    Create a Langfuse callback handler for tracing LLM calls.
+    Note: In Langfuse v3, trace attributes (user_id, session_id, tags) are passed
+    via metadata in the invoke config, not in the handler constructor.
+    """
+    return LangfuseCallbackHandler()
+
+
+def get_langfuse_metadata(job_id: str, user_id: str = None) -> dict:
+    """
+    Create metadata dict for Langfuse tracing.
+    These are passed via invoke config metadata field.
+    """
+    metadata = {
+        "langfuse_session_id": job_id,
+        "langfuse_tags": ["tonpixo", "data-analysis"],
+        "job_id": job_id
+    }
+    if user_id:
+        metadata["langfuse_user_id"] = str(user_id)
+    return metadata
+
+
+def flush_langfuse():
+    """Flush Langfuse events - call this before Lambda exits."""
     try:
-        cw.put_metric_data(
-            Namespace='Tonpixo/LLM',
-            MetricData=[
-                {
-                    'MetricName': 'TotalCost',
-                    'Dimensions': [
-                        {'Name': 'Model', 'Value': 'Claude3.5Sonnet'}
-                    ],
-                    'Value': cb.total_cost,
-                    'Unit': 'Count'
-                },
-                {
-                    'MetricName': 'InputTokens',
-                    'Value': cb.prompt_tokens,
-                    'Unit': 'Count'
-                },
-                {
-                    'MetricName': 'OutputTokens',
-                    'Value': cb.completion_tokens,
-                    'Unit': 'Count'
-                }
-            ]
-        )
-        print(f"Metrics sent: ${cb.total_cost}")
+        langfuse.flush()
     except Exception as e:
-        print(f"Failed to send metrics: {e}")
+        print(f"Failed to flush Langfuse: {e}")
 
 
 def get_csv_from_s3(job_id: str) -> pd.DataFrame:
@@ -270,7 +275,7 @@ def create_agent_graph(job_id: str):
     
     # Initialize LLM
     llm = ChatBedrock(
-        model_id="arn:aws:bedrock:us-east-1:156027872245:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model_id="arn:aws:bedrock:us-east-1:156027872245:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0",
         provider="anthropic",
         client=bedrock_runtime,
         model_kwargs={"temperature": 0.0}
@@ -354,13 +359,22 @@ Important:
     return workflow.compile()
 
 
-def process_chat(job_id: str, question: str) -> str:
+def process_chat(job_id: str, question: str, user_id: str = None) -> str:
     """
     Process a chat message using the LangGraph agent.
+    
+    Args:
+        job_id: Unique job identifier
+        question: User's question to answer
+        user_id: Optional user ID for Langfuse tracking
     """
     try:
         # Create the agent graph
         agent = create_agent_graph(job_id)
+        
+        # Create Langfuse handler and metadata for tracing
+        langfuse_handler = create_langfuse_handler()
+        langfuse_metadata = get_langfuse_metadata(job_id, user_id)
         
         # Initialize state with the user's question
         initial_state = {
@@ -370,39 +384,56 @@ def process_chat(job_id: str, question: str) -> str:
             "final_answer": ""
         }
         
-        with get_bedrock_anthropic_callback() as cb:
-            # Run the agent
-            result = agent.invoke(initial_state, {"recursion_limit": 25})
-            
-            # Log metrics
-            log_metrics_to_cloudwatch(cb, job_id)
-            
-            # Extract final answer from the last AI message
-            for message in reversed(result["messages"]):
-                if isinstance(message, AIMessage) and message.content:
-                    # Skip messages that are just tool calls
-                    if not (hasattr(message, "tool_calls") and message.tool_calls and not message.content):
-                        return message.content
-            
-            return "I couldn't generate a response."
+        # Run the agent with Langfuse callback and metadata
+        result = agent.invoke(
+            initial_state, 
+            {
+                "recursion_limit": 25, 
+                "callbacks": [langfuse_handler],
+                "metadata": langfuse_metadata
+            }
+        )
+        
+        # Flush Langfuse to ensure traces are sent (important for Lambda)
+        flush_langfuse()
+        
+        # Extract final answer from the last AI message
+        for message in reversed(result["messages"]):
+            if isinstance(message, AIMessage) and message.content:
+                # Skip messages that are just tool calls
+                if not (hasattr(message, "tool_calls") and message.tool_calls and not message.content):
+                    return message.content
+        
+        return "I couldn't generate a response."
         
     except Exception as e:
         print(f"Agent error: {e}")
         import traceback
         traceback.print_exc()
+        # Ensure flush even on error
+        flush_langfuse()
         return f"I encountered an error analyzing the data: {str(e)}"
 
 
 # ============== Streaming Support ==============
 
-async def process_chat_stream(job_id: str, question: str):
+async def process_chat_stream(job_id: str, question: str, user_id: str = None):
     """
     Process a chat message using the LangGraph agent with streaming.
     Yields chunks of the response as they are generated.
+    
+    Args:
+        job_id: Unique job identifier
+        question: User's question to answer
+        user_id: Optional user ID for Langfuse tracking
     """
     try:
         # Create the agent graph
         agent = create_agent_graph(job_id)
+        
+        # Create Langfuse handler and metadata for tracing
+        langfuse_handler = create_langfuse_handler()
+        langfuse_metadata = get_langfuse_metadata(job_id, user_id)
         
         # Initialize state
         initial_state = {
@@ -412,52 +443,69 @@ async def process_chat_stream(job_id: str, question: str):
             "final_answer": ""
         }
         
-        with get_bedrock_anthropic_callback() as cb:
-            # Stream the agent execution
-            async for event in agent.astream_events(initial_state, {"recursion_limit": 25}, version="v2"):
-                kind = event["event"]
-                
-                if kind == "on_chat_model_stream":
-                    # Stream token-by-token output
-                    chunk = event["data"]["chunk"]
-                    content = chunk.content
-                    
-                    # Handle different content formats from Claude
-                    if content:
-                        text_content = ""
-                        
-                        # Content can be a string or a list of content blocks
-                        if isinstance(content, str):
-                            text_content = content
-                        elif isinstance(content, list):
-                            # Extract text from content blocks
-                            for block in content:
-                                if isinstance(block, str):
-                                    text_content += block
-                                elif isinstance(block, dict) and block.get("type") == "text":
-                                    text_content += block.get("text", "")
-                                elif hasattr(block, "text"):
-                                    text_content += block.text
-                        
-                        if text_content:
-                            yield {"type": "token", "content": text_content}
-                
-                elif kind == "on_tool_start":
-                    # Tool is starting
-                    tool_name = event["name"]
-                    yield {"type": "tool_start", "tool": tool_name}
-                
-                elif kind == "on_tool_end":
-                    # Tool finished
-                    yield {"type": "tool_end", "tool": event["name"]}
+        # Stream the agent execution with Langfuse callback and metadata
+        async for event in agent.astream_events(
+            initial_state, 
+            {
+                "recursion_limit": 25, 
+                "callbacks": [langfuse_handler],
+                "metadata": langfuse_metadata
+            }, 
+            version="v2"
+        ):
+            kind = event["event"]
             
-            # Log metrics after completion
-            log_metrics_to_cloudwatch(cb, job_id)
-            yield {"type": "done"}
+            if kind == "on_chat_model_stream":
+                # Stream token-by-token output
+                chunk = event["data"]["chunk"]
+                content = chunk.content
+                
+                # Handle different content formats from Claude
+                if content:
+                    text_content = ""
+                    
+                    # Content can be a string or a list of content blocks
+                    if isinstance(content, str):
+                        text_content = content
+                    elif isinstance(content, list):
+                        # Extract text from content blocks
+                        for block in content:
+                            if isinstance(block, str):
+                                text_content += block
+                            elif isinstance(block, dict) and block.get("type") == "text":
+                                text_content += block.get("text", "")
+                            elif hasattr(block, "text"):
+                                text_content += block.text
+                    
+                    if text_content:
+                        yield {"type": "token", "content": text_content}
+            
+            elif kind == "on_tool_start":
+                # Tool is starting
+                tool_name = event["name"]
+                yield {"type": "tool_start", "tool": tool_name}
+            
+            elif kind == "on_tool_end":
+                # Tool finished
+                yield {"type": "tool_end", "tool": event["name"]}
+        
+        # Flush Langfuse to ensure traces are sent (important for Lambda)
+        flush_langfuse()
+        yield {"type": "done"}
             
     except Exception as e:
         print(f"Streaming agent error: {e}")
         import traceback
         traceback.print_exc()
+        # Ensure flush even on error
+        flush_langfuse()
         yield {"type": "error", "content": f"I encountered an error: {str(e)}"}
+
+
+def shutdown_langfuse():
+    """Shutdown Langfuse client - call this when Lambda is terminating."""
+    try:
+        langfuse.shutdown()
+    except Exception as e:
+        print(f"Failed to shutdown Langfuse: {e}")
 

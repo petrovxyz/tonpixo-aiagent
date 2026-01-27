@@ -11,6 +11,18 @@ Parameters:
     Type: String
     Description: "Token from BotFather"
     NoEcho: true
+  LangfuseSecretKey:
+    Type: String
+    Description: "Langfuse Secret Key (sk-lf-...)"
+    NoEcho: true
+  LangfusePublicKey:
+    Type: String
+    Description: "Langfuse Public Key (pk-lf-...)"
+    NoEcho: true
+  LangfuseHost:
+    Type: String
+    Description: "Langfuse Host URL"
+    Default: "https://cloud.langfuse.com"
 
 Globals:
   Function:
@@ -62,7 +74,11 @@ Resources:
           JOBS_QUEUE_URL: !Ref JobsQueue
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           DATA_BUCKET: !Ref DataBucket
-          
+          # Langfuse configuration
+          LANGFUSE_SECRET_KEY: !Ref LangfuseSecretKey
+          LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
+          LANGFUSE_HOST: !Ref LangfuseHost
+          LANGFUSE_TRACING_ENVIRONMENT: !Ref "AWS::StackName"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
@@ -77,7 +93,6 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
-                - cloudwatch:PutMetricData
               Resource: "*"
       FunctionUrlConfig:
         AuthType: NONE
