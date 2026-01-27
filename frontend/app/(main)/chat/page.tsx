@@ -460,6 +460,7 @@ function ChatContent() {
             const decoder = new TextDecoder()
             let accumulatedContent = ""
             let currentlyAnalyzing = false
+            let buffer = ""
 
             while (true) {
                 const { done, value } = await reader.read()
@@ -467,12 +468,16 @@ function ChatContent() {
                 if (done) break
 
                 const text = decoder.decode(value, { stream: true })
-                const lines = text.split("\n")
+                buffer += text
+
+                // Split by newline, but keep the last segment in the buffer as it might be incomplete
+                const lines = buffer.split("\n")
+                buffer = lines.pop() || ""
 
                 for (const line of lines) {
-                    if (line.startsWith("data: ")) {
+                    if (line.trim().startsWith("data: ")) {
                         try {
-                            const data = JSON.parse(line.slice(6))
+                            const data = JSON.parse(line.trim().slice(6))
 
                             if (data.type === "token") {
                                 accumulatedContent += data.content
@@ -521,6 +526,7 @@ function ChatContent() {
                             }
                         } catch (e) {
                             // Skip invalid JSON
+                            console.warn("Failed to parse SSE JSON:", e)
                         }
                     }
                 }
