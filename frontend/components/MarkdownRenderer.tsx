@@ -349,7 +349,12 @@ export function MarkdownRenderer({ content, className, isUserMessage = false }: 
                         // Images - Custom handler for Charts
                         img: ({ src, alt }) => {
                             const imgSrc = src as string || '';
-                            if (alt === 'CHART_VISUALIZATION' && imgSrc) {
+                            // Check for chart visualization either by specific alt text or URL pattern
+                            const isChart = alt === 'CHART_VISUALIZATION' ||
+                                imgSrc.includes('/charts/') ||
+                                imgSrc.includes('charts%2F');
+
+                            if (isChart && imgSrc) {
                                 return <ChartImage src={imgSrc} />
                             }
                             return (
