@@ -101,14 +101,15 @@ function ChartImage({ src }: { src: string }) {
     )
 }
 
-// Parse content and extract chart images
+// Parse content and extract chart images (deprecated, now using standard markdown images)
 function parseChartImages(content: string): { text: string; charts: string[] } {
-    const chartRegex = /\[CHART_IMAGE\](.*?)\[\/CHART_IMAGE\]/g
+    // Legacy support for older messages
+    const chartRegex = /\[CHART_IMAGE\]([\s\S]*?)\[\/CHART_IMAGE\]/g
     const charts: string[] = []
     let match
 
     while ((match = chartRegex.exec(content)) !== null) {
-        charts.push(match[1])
+        charts.push(match[1].trim())
     }
 
     // Remove chart markers from text
@@ -118,7 +119,7 @@ function parseChartImages(content: string): { text: string; charts: string[] } {
 }
 
 export function MarkdownRenderer({ content, className, isUserMessage = false }: MarkdownRendererProps) {
-    // Parse charts from content
+    // Parse legacy charts from content
     const { text, charts } = useMemo(() => parseChartImages(content), [content])
 
     return (
@@ -127,9 +128,9 @@ export function MarkdownRenderer({ content, className, isUserMessage = false }: 
             "[overflow-wrap:break-word] [word-break:keep-all]",
             className
         )}>
-            {/* Render charts first */}
+            {/* Render legacy charts first */}
             {charts.map((chartUrl, index) => (
-                <ChartImage key={`chart-${index}`} src={chartUrl} />
+                <ChartImage key={`chart-legacy-${index}`} src={chartUrl} />
             ))}
 
             {/* Render markdown text */}
@@ -345,15 +346,21 @@ export function MarkdownRenderer({ content, className, isUserMessage = false }: 
                             <td className="px-3 py-2">{children}</td>
                         ),
 
-                        // Images
-                        img: ({ src, alt }) => (
-                            <img
-                                src={src}
-                                alt={alt || ''}
-                                className="max-w-full h-auto rounded-lg my-3"
-                                loading="lazy"
-                            />
-                        ),
+                        // Images - Custom handler for Charts
+                        img: ({ src, alt }) => {
+                            const imgSrc = src as string || '';
+                            if (alt === 'CHART_VISUALIZATION' && imgSrc) {
+                                return <ChartImage src={imgSrc} />
+                            }
+                            return (
+                                <img
+                                    src={imgSrc}
+                                    alt={alt || ''}
+                                    className="max-w-full h-auto rounded-lg my-3"
+                                    loading="lazy"
+                                />
+                            )
+                        },
                     }}
                 >
                     {text}
