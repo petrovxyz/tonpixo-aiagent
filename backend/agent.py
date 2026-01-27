@@ -70,9 +70,20 @@ def get_csv_from_s3(job_id: str) -> pd.DataFrame:
     if job_id in _dataframe_cache:
         return _dataframe_cache[job_id]
     
+    # Try different scan_type suffixes
+    scan_types = ['transactions', 'jettons', 'nfts']
+    
     try:
         if not BUCKET_NAME:
             print("WARNING: DATA_BUCKET env var not set. Trying local file.")
+            # Try with scan_type suffix first, then fallback to old format
+            for scan_type in scan_types:
+                local_path = f"exports/{job_id}_{scan_type}.csv"
+                if os.path.exists(local_path):
+                    df = pd.read_csv(local_path)
+                    _dataframe_cache[job_id] = df
+                    return df
+            # Fallback to old format
             local_path = f"exports/{job_id}.csv"
             if os.path.exists(local_path):
                 df = pd.read_csv(local_path)
@@ -80,6 +91,23 @@ def get_csv_from_s3(job_id: str) -> pd.DataFrame:
                 return df
             raise Exception("DATA_BUCKET not set and local file not found")
 
+        # Try with scan_type suffix first
+        for scan_type in scan_types:
+            try:
+                file_key = f"exports/{job_id}_{scan_type}.csv"
+                response = s3.get_object(Bucket=BUCKET_NAME, Key=file_key)
+                csv_content = response['Body'].read().decode('utf-8')
+                df = pd.read_csv(StringIO(csv_content))
+                _dataframe_cache[job_id] = df
+                return df
+            except s3.exceptions.NoSuchKey:
+                continue
+            except Exception as e:
+                if 'NoSuchKey' in str(e):
+                    continue
+                raise e
+        
+        # Fallback to old format for backward compatibility
         file_key = f"exports/{job_id}.csv"
         response = s3.get_object(Bucket=BUCKET_NAME, Key=file_key)
         csv_content = response['Body'].read().decode('utf-8')

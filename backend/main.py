@@ -30,6 +30,7 @@ users_table = dynamodb.Table(USERS_TABLE_NAME)
 
 class GenerateRequest(BaseModel):
     address: str
+    scan_type: str = "transactions"  # transactions, jettons, nfts
 
 class LoginRequest(BaseModel):
     initData: str
@@ -194,13 +195,18 @@ async def start_job(request: GenerateRequest):
     jobs_table.put_item(Item={
         'job_id': job_id,
         'status': 'queued',
-        'address': request.address
+        'address': request.address,
+        'scan_type': request.scan_type
     })
     
-    message_body = json.dumps({'job_id': job_id, 'address': request.address})
+    message_body = json.dumps({
+        'job_id': job_id, 
+        'address': request.address,
+        'scan_type': request.scan_type
+    })
     sqs.send_message(QueueUrl=QUEUE_URL, MessageBody=message_body)
     
-    return {"job_id": job_id, "status": "queued"}
+    return {"job_id": job_id, "status": "queued", "scan_type": request.scan_type}
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str):
@@ -209,6 +215,23 @@ async def get_status(job_id: str):
         return {"status": "NOT_FOUND"}
     
     return response['Item']
+
+@app.post("/api/cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """Cancel a running or queued job."""
+    print(f"[CANCEL] Cancelling job {job_id}")
+    try:
+        # Update job status to cancelled
+        jobs_table.update_item(
+            Key={'job_id': job_id},
+            UpdateExpression="set #s = :s",
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'cancelled'}
+        )
+        return {"status": "cancelled", "job_id": job_id}
+    except Exception as e:
+        print(f"[CANCEL] Error: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):

@@ -676,3 +676,216 @@ def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, 
             break
     
     return pd.DataFrame(all_data)
+
+
+def fetch_jettons(account_id, api_key=None, on_progress=None):
+    """
+    Fetch all jetton (token) balances for a wallet.
+    Uses GET /v2/accounts/{account_id}/jettons endpoint.
+    
+    Returns DataFrame with columns:
+    - jetton_address: Master contract address of the jetton
+    - symbol: Token symbol (e.g., USDT, NOT)
+    - name: Full token name
+    - balance: Human-readable balance (adjusted for decimals)
+    - balance_raw: Raw balance in smallest units
+    - decimals: Token decimals
+    - price_usd: Current price in USD (if available)
+    - value_usd: Total value in USD (balance * price)
+    - verified: Whether the token is verified
+    - image_url: Token logo URL
+    - wallet_address: Jetton wallet address for this account
+    """
+    base_url = f"https://tonapi.io/v2/accounts/{account_id}/jettons"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    
+    all_data = []
+    offset = 0
+    limit = 100
+    
+    print(f"Fetching jetton balances for {account_id}...")
+    
+    while True:
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "currencies": "usd"  # Get USD prices
+        }
+        
+        try:
+            resp = requests.get(base_url, headers=headers, params=params)
+            
+            if resp.status_code == 429:
+                print("   Rate limit hit. Pausing...")
+                time.sleep(2)
+                continue
+            
+            resp.raise_for_status()
+            data = resp.json()
+            balances = data.get('balances', [])
+            
+            if not balances:
+                break
+            
+            for item in balances:
+                jetton = item.get('jetton', {})
+                
+                # Get balance with proper decimals
+                balance_raw = item.get('balance', '0')
+                decimals = int(jetton.get('decimals', 9))
+                try:
+                    balance = int(balance_raw) / (10 ** decimals)
+                except (ValueError, TypeError):
+                    balance = 0
+                
+                # Get price info
+                price_info = item.get('price', {})
+                price_usd = price_info.get('prices', {}).get('USD', 0) if price_info else 0
+                value_usd = balance * price_usd if price_usd else 0
+                
+                record = {
+                    'jetton_address': jetton.get('address', ''),
+                    'symbol': jetton.get('symbol', 'Unknown'),
+                    'name': jetton.get('name', 'Unknown Token'),
+                    'balance': balance,
+                    'balance_raw': balance_raw,
+                    'decimals': decimals,
+                    'price_usd': price_usd,
+                    'value_usd': value_usd,
+                    'verified': jetton.get('verification') == 'whitelist',
+                    'image_url': jetton.get('image', ''),
+                    'wallet_address': item.get('wallet_address', {}).get('address', '')
+                }
+                all_data.append(record)
+            
+            print(f"   Fetched batch of {len(balances)} jettons. Total: {len(all_data)}")
+            
+            if on_progress:
+                on_progress(len(all_data))
+            
+            if len(balances) < limit:
+                break
+            
+            offset += limit
+            time.sleep(0.2)  # Rate limit protection
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching jettons: {e}")
+            break
+    
+    return pd.DataFrame(all_data)
+
+
+def fetch_nfts(account_id, api_key=None, on_progress=None):
+    """
+    Fetch all NFT items owned by a wallet.
+    Uses GET /v2/accounts/{account_id}/nfts endpoint.
+    
+    Returns DataFrame with columns:
+    - nft_address: NFT item address
+    - index: Index in collection
+    - name: NFT item name
+    - description: NFT description
+    - collection_address: Collection contract address
+    - collection_name: Collection name
+    - verified: Whether the collection is verified
+    - image_url: NFT image URL (preview)
+    - metadata_url: Full metadata URL
+    - owner_address: Current owner address
+    - sale_price_ton: Sale price if listed (in TON)
+    - sale_market: Marketplace if listed
+    """
+    base_url = f"https://tonapi.io/v2/accounts/{account_id}/nfts"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    
+    all_data = []
+    offset = 0
+    limit = 100
+    
+    print(f"Fetching NFTs for {account_id}...")
+    
+    while True:
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "indirect_ownership": "false"  # Only directly owned NFTs
+        }
+        
+        try:
+            resp = requests.get(base_url, headers=headers, params=params)
+            
+            if resp.status_code == 429:
+                print("   Rate limit hit. Pausing...")
+                time.sleep(2)
+                continue
+            
+            resp.raise_for_status()
+            data = resp.json()
+            nft_items = data.get('nft_items', [])
+            
+            if not nft_items:
+                break
+            
+            for item in nft_items:
+                collection = item.get('collection', {})
+                metadata = item.get('metadata', {})
+                previews = item.get('previews', [])
+                sale = item.get('sale', {})
+                
+                # Get best preview image
+                image_url = ''
+                for preview in previews:
+                    if preview.get('resolution') == '500x500':
+                        image_url = preview.get('url', '')
+                        break
+                if not image_url and previews:
+                    image_url = previews[0].get('url', '')
+                
+                # Parse sale info
+                sale_price_ton = 0
+                sale_market = ''
+                if sale:
+                    price_info = sale.get('price', {})
+                    if price_info:
+                        try:
+                            sale_price_ton = int(price_info.get('value', 0)) / (10 ** 9)
+                        except:
+                            pass
+                    sale_market = sale.get('market', {}).get('name', '')
+                
+                record = {
+                    'nft_address': item.get('address', ''),
+                    'index': item.get('index', 0),
+                    'name': metadata.get('name', item.get('dns', 'Unknown NFT')),
+                    'description': metadata.get('description', '')[:500] if metadata.get('description') else '',
+                    'collection_address': collection.get('address', ''),
+                    'collection_name': collection.get('name', 'Unknown Collection'),
+                    'verified': item.get('verified', False) or collection.get('verified', False),
+                    'image_url': image_url or metadata.get('image', ''),
+                    'metadata_url': item.get('metadata', {}).get('url', '') if isinstance(item.get('metadata'), dict) else '',
+                    'owner_address': item.get('owner', {}).get('address', ''),
+                    'sale_price_ton': sale_price_ton,
+                    'sale_market': sale_market
+                }
+                all_data.append(record)
+            
+            print(f"   Fetched batch of {len(nft_items)} NFTs. Total: {len(all_data)}")
+            
+            if on_progress:
+                on_progress(len(all_data))
+            
+            if len(nft_items) < limit:
+                break
+            
+            offset += limit
+            time.sleep(0.2)  # Rate limit protection
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching NFTs: {e}")
+            break
+    
+    return pd.DataFrame(all_data)
