@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
+import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 
@@ -17,6 +18,8 @@ interface Message {
     content: React.ReactNode
     timestamp: Date
     isStreaming?: boolean
+    streamingText?: string  // Track the actual text being streamed
+    isAnalyzing?: boolean   // Track if agent is using tools
 }
 
 // Action Button Component for clickable buttons in messages
@@ -93,8 +96,8 @@ const StreamingMessage = ({
                             <span className="italic">Analyzing data...</span>
                         </div>
                     )}
-                    <div className="whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-break:keep-all]">
-                        {content}
+                    <div className="break-words [overflow-wrap:break-word] [word-break:keep-all]">
+                        <MarkdownRenderer content={content} isUserMessage={false} />
                         <span className="animate-pulse">▊</span>
                     </div>
                 </>
@@ -147,8 +150,12 @@ const MessageBubble = ({
                 : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
             isStreaming && "min-h-[60px]"
         )}>
-            <div className="whitespace-pre-wrap break-words [overflow-wrap:break-word] [word-break:keep-all]">
-                {content}
+            <div className="break-words [overflow-wrap:break-word] [word-break:keep-all]">
+                {typeof content === 'string' ? (
+                    <MarkdownRenderer content={content} isUserMessage={role === 'user'} />
+                ) : (
+                    content
+                )}
             </div>
             {!isStreaming && (
                 <div className={cn(
@@ -184,6 +191,7 @@ function ChatContent() {
     const hasStartedRef = useRef(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
+    const streamingMsgIdRef = useRef<string | null>(null)
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -413,14 +421,18 @@ function ChatContent() {
         setStreamingContent("")
         setIsAnalyzing(false)
 
-        // Add a streaming message placeholder
+        // Add a streaming message placeholder with thinking state
         const streamingMsgId = "streaming-" + Date.now()
+        streamingMsgIdRef.current = streamingMsgId
+
         setMessages(prev => [...prev.filter(m => !m.isStreaming), {
             id: streamingMsgId,
             role: "agent",
             content: "",
             timestamp: new Date(),
-            isStreaming: true
+            isStreaming: true,
+            streamingText: "",
+            isAnalyzing: false
         }])
 
         try {
@@ -447,6 +459,7 @@ function ChatContent() {
 
             const decoder = new TextDecoder()
             let accumulatedContent = ""
+            let currentlyAnalyzing = false
 
             while (true) {
                 const { done, value } = await reader.read()
@@ -465,30 +478,46 @@ function ChatContent() {
                                 accumulatedContent += data.content
                                 setStreamingContent(accumulatedContent)
 
-                                // Update the streaming message
+                                // Update the streaming message with new content
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, content: <StreamingMessage content={accumulatedContent} isThinking={isAnalyzing} /> }
+                                        ? { ...m, streamingText: accumulatedContent, isAnalyzing: currentlyAnalyzing }
                                         : m
                                 ))
                             } else if (data.type === "tool_start") {
+                                currentlyAnalyzing = true
                                 setIsAnalyzing(true)
+                                // Update message to show analyzing state
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, isAnalyzing: true }
+                                        : m
+                                ))
                             } else if (data.type === "tool_end") {
+                                currentlyAnalyzing = false
                                 setIsAnalyzing(false)
+                                // Update message to hide analyzing state
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, isAnalyzing: false }
+                                        : m
+                                ))
                             } else if (data.type === "done") {
                                 // Finalize the message
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, content: accumulatedContent, isStreaming: false, timestamp: new Date() }
+                                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
                                         : m
                                 ))
                                 setStreamingContent("")
+                                streamingMsgIdRef.current = null
                             } else if (data.type === "error") {
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, content: data.content, isStreaming: false, timestamp: new Date() }
+                                        ? { ...m, content: data.content, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
                                         : m
                                 ))
+                                streamingMsgIdRef.current = null
                             }
                         } catch (e) {
                             // Skip invalid JSON
@@ -501,9 +530,10 @@ function ChatContent() {
             if (accumulatedContent) {
                 setMessages(prev => prev.map(m =>
                     m.id === streamingMsgId
-                        ? { ...m, content: accumulatedContent, isStreaming: false, timestamp: new Date() }
+                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
                         : m
                 ))
+                streamingMsgIdRef.current = null
             }
 
         } catch (err: any) {
@@ -527,6 +557,7 @@ function ChatContent() {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 addMessage("agent", "I encountered an error talking to the agent.")
             }
+            streamingMsgIdRef.current = null
         } finally {
             setIsLoading(false)
             setStreamingContent("")
@@ -612,6 +643,14 @@ function ChatContent() {
                                             <span className="animate-pulse italic">Thinking...</span>
                                         </div>
                                     } />
+                                ) : msg.isStreaming ? (
+                                    <MessageBubble
+                                        role="agent"
+                                        content={<StreamingMessage content={msg.streamingText || ""} isThinking={msg.isAnalyzing || false} />}
+                                        timestamp={msg.timestamp}
+                                        isStreaming={true}
+                                        userPhotoUrl={user?.photo_url}
+                                    />
                                 ) : (
                                     <MessageBubble
                                         role={msg.role}

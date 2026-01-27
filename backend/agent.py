@@ -309,7 +309,9 @@ Workflow:
 Important:
 - Do not answer questions unrelated to the data
 - Round numeric results to appropriate precision
-- When showing large results, summarize key findings"""
+- When showing large results, summarize key findings
+- Provide answers in human-readable format
+- NEVER use tables or code blocks"""
 
     # Agent node - decides what to do
     def agent_node(state: AgentState) -> AgentState:
