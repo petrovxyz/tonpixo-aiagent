@@ -88,6 +88,8 @@ Resources:
             QueueName: !GetAtt JobsQueue.QueueName
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
+        - S3WritePolicy:
+            BucketName: !Ref DataBucket
         - Statement:
             - Effect: Allow
               Action:
