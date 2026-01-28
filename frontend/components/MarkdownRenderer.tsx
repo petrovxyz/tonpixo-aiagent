@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,11 @@ function ChartImage({ src }: { src: string }) {
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
+    const [isMounted, setIsMounted] = useState(false)
+
+    useEffect(() => {
+        setIsMounted(true)
+    }, [])
 
     if (hasError) {
         return (
@@ -66,9 +72,9 @@ function ChartImage({ src }: { src: string }) {
             </div>
 
             {/* Fullscreen modal */}
-            {isExpanded && (
+            {isExpanded && isMounted && createPortal(
                 <div
-                    className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+                    className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
                     onClick={() => setIsExpanded(false)}
                 >
                     {/* Close button - large touch target for mobile */}
@@ -95,7 +101,8 @@ function ChartImage({ src }: { src: string }) {
                     <div className="p-4 text-center text-white/50 text-sm">
                         Tap anywhere to close
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     )
