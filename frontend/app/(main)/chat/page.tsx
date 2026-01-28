@@ -7,7 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
-import { MarkdownRenderer } from "@/components/MarkdownRenderer"
+import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 
@@ -97,7 +97,7 @@ const StreamingMessage = ({
                         </div>
                     )}
                     <div className="break-words [overflow-wrap:break-word] [word-break:keep-all]">
-                        <MarkdownRenderer content={content} isUserMessage={false} />
+                        <MarkdownRenderer content={content} isUserMessage={false} isStreaming={true} />
                         <span className="animate-pulse">▊</span>
                     </div>
                 </>
@@ -150,13 +150,25 @@ const MessageBubble = ({
                 : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
             isStreaming && "min-h-[60px]"
         )}>
-            <div className="break-words [overflow-wrap:break-word] [word-break:keep-all]">
+            <motion.div
+                initial={role === "agent" && !isStreaming ? "hidden" : "visible"}
+                animate="visible"
+                variants={{
+                    visible: {
+                        transition: {
+                            staggerChildren: 0.03,
+                            delayChildren: 0.1
+                        }
+                    }
+                }}
+                className="break-words [overflow-wrap:break-word] [word-break:keep-all]"
+            >
                 {typeof content === 'string' ? (
-                    <MarkdownRenderer content={content} isUserMessage={role === 'user'} />
+                    <MarkdownRenderer content={content} isUserMessage={role === 'user'} isStreaming={isStreaming} />
                 ) : (
                     content
                 )}
-            </div>
+            </motion.div>
             {!isStreaming && (
                 <div className={cn(
                     "text-[10.5px] opacity-70 mt-4 font-bold tracking-tight",
@@ -254,10 +266,12 @@ function ChatContent() {
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center font-bold text-white gap-1">
                             <FontAwesomeIcon icon={faCheckCircle} />
-                            <span>Analysis complete</span>
+                            <span><AnimatedText isAgent={true}>Analysis complete</AnimatedText></span>
                         </div>
                         <p className="text-white/90">
-                            I'm done! {data.count} {getScanTypeLabel(scanType)} have been scanned and I'm ready for your questions.
+                            <AnimatedText isAgent={true}>
+                                I'm done! {data.count} {getScanTypeLabel(scanType)} have been scanned and I'm ready for your questions.
+                            </AnimatedText>
                         </p>
                     </div>
                 ))
@@ -321,16 +335,18 @@ function ChatContent() {
         addMessage("agent", (
             <div className="flex flex-col gap-4">
                 <p className="text-white">
-                    Got it! I've received the address. You can explore it by yourself on:
+                    <AnimatedText isAgent={true}>
+                        Got it! I've received the address. You can explore it by yourself on:
+                    </AnimatedText>
                 </p>
-                <div className="flex flex-col gap-2">
+                <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
                     <ExplorerLink
                         href={`https://tonviewer.com/${address}`}
                         icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
                     >
                         Tonviewer
                     </ExplorerLink>
-                </div>
+                </motion.div>
             </div>
         ))
 
@@ -345,30 +361,38 @@ function ChatContent() {
         addMessage("agent", (
             <div className="flex flex-col gap-4">
                 <p className="text-white">
-                    What would you like me to scan?
+                    <AnimatedText isAgent={true}>
+                        What would you like me to scan?
+                    </AnimatedText>
                 </p>
                 <div className="flex flex-col gap-2">
-                    <ActionButton
-                        onClick={() => handleScanTypeSelect(address, 'transactions')}
-                        icon={<FontAwesomeIcon icon={faClockRotateLeft} />}
-                        variant="primary"
-                    >
-                        Transactions
-                    </ActionButton>
-                    <ActionButton
-                        onClick={() => handleScanTypeSelect(address, 'jettons')}
-                        icon={<FontAwesomeIcon icon={faWallet} />}
-                        variant="primary"
-                    >
-                        Jettons
-                    </ActionButton>
-                    <ActionButton
-                        onClick={() => handleScanTypeSelect(address, 'nfts')}
-                        icon={<FontAwesomeIcon icon={faObjectGroup} />}
-                        variant="primary"
-                    >
-                        NFTs
-                    </ActionButton>
+                    <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                        <ActionButton
+                            onClick={() => handleScanTypeSelect(address, 'transactions')}
+                            icon={<FontAwesomeIcon icon={faClockRotateLeft} />}
+                            variant="primary"
+                        >
+                            Transactions
+                        </ActionButton>
+                    </motion.div>
+                    <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                        <ActionButton
+                            onClick={() => handleScanTypeSelect(address, 'jettons')}
+                            icon={<FontAwesomeIcon icon={faWallet} />}
+                            variant="primary"
+                        >
+                            Jettons
+                        </ActionButton>
+                    </motion.div>
+                    <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                        <ActionButton
+                            onClick={() => handleScanTypeSelect(address, 'nfts')}
+                            icon={<FontAwesomeIcon icon={faObjectGroup} />}
+                            variant="primary"
+                        >
+                            NFTs
+                        </ActionButton>
+                    </motion.div>
                 </div>
             </div>
         ))
@@ -623,7 +647,7 @@ function ChatContent() {
             {/* Main Scrollable Area */}
             <div className="flex-1 overflow-y-auto z-10 scroll-smooth scrollbar-hide">
                 <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col justify-end pt-38 pb-32">
-                    <AnimatePresence initial={false}>
+                    <AnimatePresence initial={true}>
                         {messages.map((msg) => (
                             <div key={msg.id}>
                                 {msg.content === "collecting" ? (
