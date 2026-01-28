@@ -28,8 +28,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "TONPixo AI",
-  description: "Advanced AI-powered analysis for TON Blockchain",
+  title: "Tonpixo",
+  description: "AI-powered analysis for TON Blockchain",
 };
 
 export default function RootLayout({

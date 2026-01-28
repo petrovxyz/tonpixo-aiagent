@@ -853,7 +853,7 @@ function ChatContent() {
         <div className="relative w-full h-[100dvh] flex flex-col">
             {/* Main Scrollable Area */}
             <div className="flex-1 overflow-y-auto z-10 scroll-smooth scrollbar-hide">
-                <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col justify-end pt-38 pb-32">
+                <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col justify-end pt-44 pb-32">
                     <AnimatePresence initial={true}>
                         {messages.map((msg) => (
                             <div key={msg.id}>
