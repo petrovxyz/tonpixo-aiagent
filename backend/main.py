@@ -10,21 +10,15 @@ import json
 import asyncio
 import uvicorn
 from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
 
 app = FastAPI()
 
-# CORS middleware - Lambda Web Adapter handles HTTP properly so standard middleware works
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Note: CORS is handled by Lambda Function URL configuration in template.yaml
+# Do NOT add CORSMiddleware here - it will cause duplicate headers
+
 sqs = boto3.client('sqs')
 dynamodb = boto3.resource('dynamodb')
 

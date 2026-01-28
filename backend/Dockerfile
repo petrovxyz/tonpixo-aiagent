@@ -3,7 +3,7 @@
 FROM public.ecr.aws/docker/library/python:3.11-slim-bullseye
 
 # Install Lambda Web Adapter extension for response streaming
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Install system dependencies for matplotlib and build tools
 RUN apt-get update && apt-get install -y \

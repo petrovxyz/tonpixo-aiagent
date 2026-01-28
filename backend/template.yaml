@@ -71,7 +71,7 @@ Resources:
       Timeout: 120
       MemorySize: 1024
       Architectures:
-        - x86_64
+        - arm64
       Environment:
         Variables:
           # Lambda Web Adapter configuration for response streaming
