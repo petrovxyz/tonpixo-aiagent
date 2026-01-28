@@ -110,23 +110,27 @@ function ChartImage({ src }: { src: string }) {
 
 // Parse content and extract chart images (deprecated, now using standard markdown images)
 function parseChartImages(content: string): { text: string; charts: string[] } {
-    // Legacy support for older messages
-    const chartRegex = /\[CHART_IMAGE\]([\s\S]*?)\[\/CHART_IMAGE\]/g
     const charts: string[] = []
-    let match
+    let text = content
 
-    while ((match = chartRegex.exec(content)) !== null) {
-        charts.push(match[1].trim())
-    }
+    // 1. Legacy support: [CHART_IMAGE]url[/CHART_IMAGE]
+    text = text.replace(/\[CHART_IMAGE\]([\s\S]*?)\[\/CHART_IMAGE\]/g, (match, url) => {
+        charts.push(url.trim())
+        return ''
+    })
 
-    // Remove chart markers from text
-    const text = content.replace(chartRegex, '').trim()
+    // 2. Standard Markdown support for specific chart tag: ![CHART_VISUALIZATION](url)
+    // We Extract this manually to ensure it uses our custom component and isn't affected by parsing issues
+    text = text.replace(/!\[CHART_VISUALIZATION\]\(([^)]+)\)/g, (match, url) => {
+        charts.push(url.trim())
+        return ''
+    })
 
-    return { text, charts }
+    return { text: text.trim(), charts }
 }
 
 export function MarkdownRenderer({ content, className, isUserMessage = false }: MarkdownRendererProps) {
-    // Parse legacy charts from content
+    // Parse charts from content
     const { text, charts } = useMemo(() => parseChartImages(content), [content])
 
     return (
@@ -135,9 +139,9 @@ export function MarkdownRenderer({ content, className, isUserMessage = false }: 
             "[overflow-wrap:break-word] [word-break:keep-all]",
             className
         )}>
-            {/* Render legacy charts first */}
+            {/* Render charts */}
             {charts.map((chartUrl, index) => (
-                <ChartImage key={`chart-legacy-${index}`} src={chartUrl} />
+                <ChartImage key={`chart-${index}`} src={chartUrl} />
             ))}
 
             {/* Render markdown text */}
