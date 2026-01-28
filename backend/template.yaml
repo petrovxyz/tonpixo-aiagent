@@ -112,6 +112,7 @@ Resources:
             - "*"
           AllowHeaders:
             - "*"
+          MaxAge: 86400
         InvokeMode: RESPONSE_STREAM
       Events:
         ApiEvent:

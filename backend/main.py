@@ -8,8 +8,7 @@ load_dotenv()
 import uuid
 import json
 import asyncio
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mangum import Mangum
@@ -17,13 +16,37 @@ from mangum import Mangum
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
 
 app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# Pure ASGI middleware for CORS - doesn't buffer responses (important for streaming!)
+# BaseHTTPMiddleware buffers responses which breaks SSE streaming
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    # Handle preflight OPTIONS requests
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "86400",
+            }
+        )
+    
+    response = await call_next(request)
+    
+    # Skip adding CORS headers for streaming endpoint - Lambda Function URL handles it
+    if request.url.path == "/api/chat/stream":
+        return response
+    
+    # Add CORS headers for other endpoints (going through API Gateway)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    
+    return response
 sqs = boto3.client('sqs')
 dynamodb = boto3.resource('dynamodb')
 

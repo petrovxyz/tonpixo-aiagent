@@ -536,6 +536,9 @@ function ChatContent() {
         const streamUrl = process.env.NEXT_PUBLIC_STREAM_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
 
+        console.log("[STREAM] Starting stream to:", streamUrl)
+        console.log("[STREAM] API URL:", apiUrl)
+
         // Abort any existing stream
         if (abortControllerRef.current) {
             abortControllerRef.current.abort()
@@ -562,6 +565,7 @@ function ChatContent() {
         }])
 
         try {
+            console.log("[STREAM] Fetching...")
             const response = await fetch(`${streamUrl}/api/chat/stream`, {
                 method: "POST",
                 headers: {
@@ -574,6 +578,9 @@ function ChatContent() {
                 signal: abortControllerRef.current.signal
             })
 
+            console.log("[STREAM] Response status:", response.status)
+            console.log("[STREAM] Response headers:", Object.fromEntries(response.headers.entries()))
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`)
             }
@@ -583,17 +590,25 @@ function ChatContent() {
                 throw new Error("No reader available")
             }
 
+            console.log("[STREAM] Got reader, starting to read...")
+
             const decoder = new TextDecoder()
             let accumulatedContent = ""
             let currentlyAnalyzing = false
             let buffer = ""
+            let chunkCount = 0
 
             while (true) {
                 const { done, value } = await reader.read()
 
-                if (done) break
+                if (done) {
+                    console.log("[STREAM] Stream done, total chunks:", chunkCount)
+                    break
+                }
 
+                chunkCount++
                 const text = decoder.decode(value, { stream: true })
+                console.log("[STREAM] Chunk", chunkCount, "raw text:", text.substring(0, 200))
                 buffer += text
 
                 // Split by newline, but keep the last segment in the buffer as it might be incomplete
@@ -603,7 +618,10 @@ function ChatContent() {
                 for (const line of lines) {
                     if (line.trim().startsWith("data: ")) {
                         try {
-                            const data = JSON.parse(line.trim().slice(6))
+                            const jsonStr = line.trim().slice(6)
+                            console.log("[STREAM] Parsing JSON:", jsonStr.substring(0, 100))
+                            const data = JSON.parse(jsonStr)
+                            console.log("[STREAM] Event type:", data.type)
 
                             if (data.type === "token") {
                                 accumulatedContent += data.content
@@ -634,6 +652,7 @@ function ChatContent() {
                                         : m
                                 ))
                             } else if (data.type === "done") {
+                                console.log("[STREAM] Got done event, finalizing with content length:", accumulatedContent.length)
                                 // Finalize the message - preserve traceId
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
@@ -643,6 +662,7 @@ function ChatContent() {
                                 setStreamingContent("")
                                 streamingMsgIdRef.current = null
                             } else if (data.type === "trace_id") {
+                                console.log("[STREAM] Got trace_id:", data.content)
                                 // Update message to include traceId
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
@@ -650,6 +670,7 @@ function ChatContent() {
                                         : m
                                 ))
                             } else if (data.type === "error") {
+                                console.log("[STREAM] Got error:", data.content)
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
                                         ? { ...m, content: data.content, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
@@ -659,14 +680,18 @@ function ChatContent() {
                             }
                         } catch (e) {
                             // Skip invalid JSON
-                            console.warn("Failed to parse SSE JSON:", e)
+                            console.warn("[STREAM] Failed to parse SSE JSON:", e, "line:", line)
                         }
                     }
                 }
             }
 
+            console.log("[STREAM] Loop ended, accumulated content length:", accumulatedContent.length)
+            console.log("[STREAM] Remaining buffer:", buffer)
+
             // If we got content but no "done" event, finalize anyway - preserve traceId
-            if (accumulatedContent) {
+            if (accumulatedContent && streamingMsgIdRef.current) {
+                console.log("[STREAM] Finalizing without done event")
                 setMessages(prev => prev.map(m =>
                     m.id === streamingMsgId
                         ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date(), traceId: m.traceId }
@@ -677,11 +702,11 @@ function ChatContent() {
 
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log('Stream aborted')
+                console.log('[STREAM] Aborted')
                 return
             }
 
-            console.error('Streaming error:', err)
+            console.error('[STREAM] Error:', err)
 
             // Fallback to non-streaming API
             try {
