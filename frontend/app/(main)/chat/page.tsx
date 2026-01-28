@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup } from "@fortawesome/free-solid-svg-icons"
+import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
+import { useToast } from "@/components/Toast"
 
 // Message Type Definition
 interface Message {
@@ -20,25 +21,31 @@ interface Message {
     isStreaming?: boolean
     streamingText?: string  // Track the actual text being streamed
     isAnalyzing?: boolean   // Track if agent is using tools
+    traceId?: string        // Langfuse trace ID for feedback
 }
+
 
 // Action Button Component for clickable buttons in messages
 const ActionButton = ({
     children,
     onClick,
     icon,
-    variant = "primary"
+    variant = "primary",
+    className
 }: {
     children: React.ReactNode
     onClick: () => void
     icon?: React.ReactNode
-    variant?: "primary" | "secondary" | "link"
+    variant?: "primary" | "secondary" | "link" | "icon"
+    className?: string
 }) => (
     <button
         onClick={onClick}
         className={cn(
-            "w-full flex items-center text-[14px] justify-center gap-1 px-4 py-3 rounded-xl font-medium transition-all active:scale-[0.98] cursor-pointer",
-            variant === "primary" && "bg-[#0098EA] text-white hover:bg-[#0088CC]",
+            "flex items-center justify-center gap-1.5 font-medium transition-all active:scale-[0.98] cursor-pointer",
+            variant === "primary" && "w-full px-4 py-3 rounded-xl bg-[#0098EA] text-white hover:bg-[#0088CC] text-[14px]",
+            variant === "icon" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
+            className
         )}
     >
         {icon}
@@ -111,82 +118,142 @@ const MessageBubble = ({
     content,
     timestamp,
     isStreaming = false,
-    userPhotoUrl
+    userPhotoUrl,
+    traceId,
+    onFeedback,
+    onCopy
 }: {
     role: "user" | "agent"
     content: React.ReactNode
     timestamp: Date
     isStreaming?: boolean
     userPhotoUrl?: string | null
-}) => (
-    <motion.div
-        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className={cn(
-            "flex w-full mb-4 px-4 gap-3 max-w-[90%] items-end",
-            role === "user" ? "flex-row-reverse ml-auto" : "flex-row"
-        )}
-    >
-        {role === "agent" && (
-            <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                <img src="/logo.svg" alt="Agent" className="w-6 h-6 object-contain" />
-            </div>
-        )}
-        {role === "user" && (
-            <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                {userPhotoUrl ? (
-                    <img src={userPhotoUrl} alt="User" className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#4FC3F7] to-[#0098EA] flex items-center justify-center text-white font-bold text-sm">
-                        U
+    traceId?: string
+    onFeedback?: (score: number, traceId: string) => void
+    onCopy?: (text: string) => void
+}) => {
+    const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null)
+
+    const handleFeedback = (score: number) => {
+        if (traceId && onFeedback && feedbackGiven === null) {
+            onFeedback(score, traceId)
+            setFeedbackGiven(score)
+        }
+    }
+
+    // Extract text content for copy purposes
+    const getTextContent = (node: React.ReactNode): string => {
+        if (typeof node === 'string') return node
+        if (Array.isArray(node)) return node.map(getTextContent).join('')
+        return ''
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className={cn(
+                "flex w-full mb-4 px-4 gap-3 max-w-[90%] items-end",
+                role === "user" ? "flex-row-reverse ml-auto" : "flex-row"
+            )}
+        >
+            {role === "agent" && (
+                <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
+                    <img src="/logo.svg" alt="Agent" className="w-6 h-6 object-contain" />
+                </div>
+            )}
+            {role === "user" && (
+                <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
+                    {userPhotoUrl ? (
+                        <img src={userPhotoUrl} alt="User" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-[#4FC3F7] to-[#0098EA] flex items-center justify-center text-white font-bold text-sm">
+                            U
+                        </div>
+                    )}
+                </div>
+            )}
+            <div className={cn(
+                "relative max-w-[85%] md:max-w-[75%] px-5 py-4 text-[16px] font-medium leading-relaxed shadow-lg transition-all",
+                role === "user"
+                    ? "bg-white text-gray-900 rounded-3xl rounded-br-sm"
+                    : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
+                isStreaming && "min-h-[60px]"
+            )}>
+                <motion.div
+                    initial={role === "agent" && !isStreaming ? "hidden" : "visible"}
+                    animate="visible"
+                    variants={{
+                        visible: {
+                            transition: {
+                                staggerChildren: 0.03,
+                                delayChildren: 0.1
+                            }
+                        }
+                    }}
+                    className="break-words [overflow-wrap:break-word] [word-break:keep-all]"
+                >
+                    {typeof content === 'string' ? (
+                        <MarkdownRenderer content={content} isUserMessage={role === 'user'} isStreaming={isStreaming} />
+                    ) : (
+                        content
+                    )}
+                </motion.div>
+                {!isStreaming && (
+                    <div className="flex items-center justify-between mt-3">
+                        <div className={cn(
+                            "text-[10.5px] opacity-70 font-bold tracking-tight",
+                            role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
+                        )}>
+                            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+
+                        {/* Feedback and Actions */}
+                        <div className="flex items-center gap-1">
+                            {role === "agent" && traceId && (
+                                <>
+                                    <ActionButton
+                                        variant="icon"
+                                        onClick={() => handleFeedback(1)}
+                                        className={cn(feedbackGiven === 1 && "text-[#4FC3F7] bg-white/10")}
+                                    >
+                                        <FontAwesomeIcon icon={faThumbsUp} />
+                                    </ActionButton>
+                                    <ActionButton
+                                        variant="icon"
+                                        onClick={() => handleFeedback(0)}
+                                        className={cn(feedbackGiven === 0 && "text-red-400 bg-white/10")}
+                                    >
+                                        <FontAwesomeIcon icon={faThumbsDown} />
+                                    </ActionButton>
+                                </>
+                            )}
+
+                            {/* Copy Button - Visible for User OR Agent with TraceId */}
+                            {(role === "user" || (role === "agent" && traceId)) && (
+                                <ActionButton
+                                    variant="icon"
+                                    onClick={() => onCopy?.(typeof content === 'string' ? content : getTextContent(content))}
+                                >
+                                    <FontAwesomeIcon icon={faCopy} />
+                                </ActionButton>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
-        )}
-        <div className={cn(
-            "relative max-w-[85%] md:max-w-[75%] px-5 py-4 text-[16px] font-medium leading-relaxed shadow-lg transition-all",
-            role === "user"
-                ? "bg-white text-gray-900 rounded-3xl rounded-br-sm"
-                : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
-            isStreaming && "min-h-[60px]"
-        )}>
-            <motion.div
-                initial={role === "agent" && !isStreaming ? "hidden" : "visible"}
-                animate="visible"
-                variants={{
-                    visible: {
-                        transition: {
-                            staggerChildren: 0.03,
-                            delayChildren: 0.1
-                        }
-                    }
-                }}
-                className="break-words [overflow-wrap:break-word] [word-break:keep-all]"
-            >
-                {typeof content === 'string' ? (
-                    <MarkdownRenderer content={content} isUserMessage={role === 'user'} isStreaming={isStreaming} />
-                ) : (
-                    content
-                )}
-            </motion.div>
-            {!isStreaming && (
-                <div className={cn(
-                    "text-[10.5px] opacity-70 mt-4 font-bold tracking-tight",
-                    role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
-                )}>
-                    {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-            )}
-        </div>
-    </motion.div>
-)
+        </motion.div>
+    )
+}
 
 
 function ChatContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const addressParam = searchParams.get("address")
+
     const { isMobile, user } = useTelegram()
+    const { showToast } = useToast()
 
     const [messages, setMessages] = useState<Array<Message>>([])
     const [inputValue, setInputValue] = useState("")
@@ -247,6 +314,27 @@ function ChatContent() {
             case 'nfts': return 'NFTs'
             default: return 'transactions'
         }
+    }
+
+    const handleFeedback = async (score: number, traceId: string) => {
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            await axios.post(`${apiUrl}/api/score`, {
+                trace_id: traceId,
+                score: score,
+                name: "user-feedback"
+            })
+            showToast("Thanks for your feedback!", "success")
+        } catch (error) {
+            console.error("Feedback error:", error)
+            showToast("Failed to send feedback", "error")
+        }
+    }
+
+    const handleCopy = (text: string) => {
+        if (!text) return
+        navigator.clipboard.writeText(text)
+        showToast("Copied to clipboard", "info")
     }
 
     // Existing Polling Logic
@@ -410,7 +498,9 @@ function ChatContent() {
         startSearch(address, scanType)
     }
 
-    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false) => {
+
+
+    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false, traceId?: string) => {
         setMessages(prev => [
             ...prev.filter(m => m.content !== "collecting" && m.content !== "thinking"),
             {
@@ -418,7 +508,8 @@ function ChatContent() {
                 role,
                 content,
                 timestamp: new Date(),
-                isStreaming
+                isStreaming,
+                traceId
             }
         ])
     }
@@ -540,6 +631,13 @@ function ChatContent() {
                                 ))
                                 setStreamingContent("")
                                 streamingMsgIdRef.current = null
+                            } else if (data.type === "trace_id") {
+                                // Update message to include traceId
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, traceId: data.content }
+                                        : m
+                                ))
                             } else if (data.type === "error") {
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
@@ -582,7 +680,8 @@ function ChatContent() {
                 })
 
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
-                addMessage("agent", response.data.answer || "I couldn't get an answer.")
+                const responseData = response.data
+                addMessage("agent", responseData.answer || "I couldn't get an answer.", false, responseData.trace_id)
             } catch (fallbackErr) {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 addMessage("agent", "I encountered an error talking to the agent.")
@@ -688,6 +787,9 @@ function ChatContent() {
                                         timestamp={msg.timestamp}
                                         isStreaming={msg.isStreaming}
                                         userPhotoUrl={user?.photo_url}
+                                        traceId={msg.traceId}
+                                        onFeedback={handleFeedback}
+                                        onCopy={handleCopy}
                                     />
                                 )}
                             </div>

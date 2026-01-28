@@ -13,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mangum import Mangum
-from agent import process_chat, process_chat_stream
+from mangum import Mangum
+from agent import process_chat, process_chat_stream, langfuse
 
 app = FastAPI()
 app.add_middleware(
@@ -42,7 +43,16 @@ class LoginRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     job_id: str
+class ChatRequest(BaseModel):
+    job_id: str
     question: str
+
+class ScoreRequest(BaseModel):
+    trace_id: str
+    score: float
+    comment: str | None = None
+    name: str | None = None
+
 
 @app.get("/api/health")
 async def health_check():
@@ -242,8 +252,9 @@ async def cancel_job(job_id: str):
 async def chat(request: ChatRequest):
     print(f"[CHAT] Received question for job {request.job_id}: {request.question}")
     try:
-        answer = process_chat(request.job_id, request.question)
-        return {"answer": answer, "status": "success"}
+    try:
+        result = process_chat(request.job_id, request.question)
+        return {"answer": result["content"], "trace_id": result["trace_id"], "status": "success"}
     except Exception as e:
         print(f"[CHAT] Error: {e}")
         return {"status": "error", "message": str(e)}
@@ -278,6 +289,11 @@ async def chat_stream(request: ChatRequest):
                     # Streaming complete
                     data = json.dumps({"type": "done"})
                     yield f"data: {data}\n\n"
+
+                elif event_type == "trace_id":
+                    # Trace ID received
+                    data = json.dumps({"type": "trace_id", "content": event["content"]})
+                    yield f"data: {data}\n\n"
                 
                 elif event_type == "error":
                     # Error occurred
@@ -298,6 +314,24 @@ async def chat_stream(request: ChatRequest):
             "X-Accel-Buffering": "no"
         }
     )
+
+@app.post("/api/score")
+async def score_trace(request: ScoreRequest):
+    """
+    Record a score for a specific trace in Langfuse.
+    """
+    print(f"[SCORE] Received score for trace {request.trace_id}: {request.score}")
+    try:
+        langfuse.score(
+            trace_id=request.trace_id,
+            name=request.name or "user-feedback",
+            value=request.score,
+            comment=request.comment
+        )
+        return {"status": "success"}
+    except Exception as e:
+        print(f"[SCORE] Error recording score: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 handler = Mangum(app)

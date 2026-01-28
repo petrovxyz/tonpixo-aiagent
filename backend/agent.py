@@ -651,7 +651,18 @@ Security and compliance protocols (STRICTLY ENFORCED):
     return workflow.compile()
 
 
-def process_chat(job_id: str, question: str, user_id: str = None) -> str:
+def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
+    """
+    Process a chat message using the LangGraph agent.
+    
+    Args:
+        job_id: Unique job identifier
+        question: User's question to answer
+        user_id: Optional user ID for Langfuse tracking
+        
+    Returns:
+        dict: {"content": str, "trace_id": str}
+    """
     """
     Process a chat message using the LangGraph agent.
     
@@ -689,14 +700,23 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> str:
         # Flush Langfuse to ensure traces are sent (important for Lambda)
         flush_langfuse()
         
+        # Get trace_id from handler if available
+        trace_id = None
+        if hasattr(langfuse_handler, "get_trace_id"):
+            trace_id = langfuse_handler.get_trace_id()
+        elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
+             trace_id = langfuse_handler.trace.id
+        
         # Extract final answer from the last AI message
+        answer = "I couldn't generate a response."
         for message in reversed(result["messages"]):
             if isinstance(message, AIMessage) and message.content:
                 # Skip messages that are just tool calls
                 if not (hasattr(message, "tool_calls") and message.tool_calls and not message.content):
-                    return message.content
+                    answer = message.content
+                    break
         
-        return "I couldn't generate a response."
+        return {"content": answer, "trace_id": trace_id}
         
     except Exception as e:
         print(f"Agent error: {e}")
@@ -704,7 +724,7 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> str:
         traceback.print_exc()
         # Ensure flush even on error
         flush_langfuse()
-        return f"I encountered an error analyzing the data: {str(e)}"
+        return {"content": f"I encountered an error analyzing the data: {str(e)}", "trace_id": None}
 
 
 # ============== Streaming Support ==============
@@ -781,6 +801,16 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
                 # Tool finished
                 yield {"type": "tool_end", "tool": event["name"]}
         
+        # Yield trace_id if available
+        trace_id = None
+        if hasattr(langfuse_handler, "get_trace_id"):
+            trace_id = langfuse_handler.get_trace_id()
+        elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
+             trace_id = langfuse_handler.trace.id
+             
+        if trace_id:
+            yield {"type": "trace_id", "content": trace_id}
+            
         # Flush Langfuse to ensure traces are sent (important for Lambda)
         flush_langfuse()
         yield {"type": "done"}
@@ -798,6 +828,8 @@ def shutdown_langfuse():
     """Shutdown Langfuse client - call this when Lambda is terminating."""
     try:
         langfuse.shutdown()
+    except Exception as e:
+        print(f"Failed to shutdown Langfuse: {e}")
     except Exception as e:
         print(f"Failed to shutdown Langfuse: {e}")
 

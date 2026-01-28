@@ -5,6 +5,7 @@ import "./globals.css";
 import Preloader from "@/components/Preloader";
 import { UIProvider } from "@/context/UIContext";
 import { TelegramProvider } from "@/context/TelegramContext";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,8 +47,10 @@ export default function RootLayout({
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <TelegramProvider>
           <UIProvider>
-            <Preloader />
-            {children}
+            <ToastProvider>
+              <Preloader />
+              {children}
+            </ToastProvider>
           </UIProvider>
         </TelegramProvider>
       </body>
