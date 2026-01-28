@@ -22,6 +22,7 @@ interface Message {
     streamingText?: string  // Track the actual text being streamed
     isAnalyzing?: boolean   // Track if agent is using tools
     traceId?: string        // Langfuse trace ID for feedback
+    isSystemMessage?: boolean // Flag for system messages (no actions)
 }
 
 
@@ -36,7 +37,7 @@ const ActionButton = ({
     children: React.ReactNode
     onClick: () => void
     icon?: React.ReactNode
-    variant?: "primary" | "secondary" | "link" | "icon"
+    variant?: "primary" | "secondary" | "link" | "icon_user" | "icon_agent"
     className?: string
 }) => (
     <button
@@ -44,7 +45,8 @@ const ActionButton = ({
         className={cn(
             "flex items-center justify-center gap-1.5 font-medium transition-all active:scale-[0.98] cursor-pointer",
             variant === "primary" && "w-full px-4 py-3 rounded-xl bg-[#0098EA] text-white hover:bg-[#0088CC] text-[14px]",
-            variant === "icon" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
+            variant === "icon_user" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
+            variant === "icon_agent" && "mx-2 p-1.5 rounded-full text-white bg-white/10 hover:bg-white/15 text-sm",
             className
         )}
     >
@@ -121,7 +123,8 @@ const MessageBubble = ({
     userPhotoUrl,
     traceId,
     onFeedback,
-    onCopy
+    onCopy,
+    isSystemMessage = false
 }: {
     role: "user" | "agent"
     content: React.ReactNode
@@ -131,13 +134,15 @@ const MessageBubble = ({
     traceId?: string
     onFeedback?: (score: number, traceId: string) => void
     onCopy?: (text: string) => void
+    isSystemMessage?: boolean
 }) => {
     const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null)
 
     const handleFeedback = (score: number) => {
-        if (traceId && onFeedback && feedbackGiven === null) {
+        if (feedbackGiven !== null) return
+        setFeedbackGiven(score)
+        if (traceId && onFeedback) {
             onFeedback(score, traceId)
-            setFeedbackGiven(score)
         }
     }
 
@@ -200,45 +205,44 @@ const MessageBubble = ({
                     )}
                 </motion.div>
                 {!isStreaming && (
-                    <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center justify-between mt-4">
                         <div className={cn(
-                            "text-[10.5px] opacity-70 font-bold tracking-tight",
+                            "text-[10px] opacity-70 font-bold tracking-tight mt-1",
                             role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
                         )}>
                             {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
 
-                        {/* Feedback and Actions */}
-                        <div className="flex items-center gap-1">
-                            {role === "agent" && traceId && (
-                                <>
-                                    <ActionButton
-                                        variant="icon"
-                                        onClick={() => handleFeedback(1)}
-                                        className={cn(feedbackGiven === 1 && "text-[#4FC3F7] bg-white/10")}
-                                    >
-                                        <FontAwesomeIcon icon={faThumbsUp} />
-                                    </ActionButton>
-                                    <ActionButton
-                                        variant="icon"
-                                        onClick={() => handleFeedback(0)}
-                                        className={cn(feedbackGiven === 0 && "text-red-400 bg-white/10")}
-                                    >
-                                        <FontAwesomeIcon icon={faThumbsDown} />
-                                    </ActionButton>
-                                </>
-                            )}
-
-                            {/* Copy Button - Visible for User OR Agent with TraceId */}
-                            {(role === "user" || (role === "agent" && traceId)) && (
+                        {/* Feedback and Actions - Only show if NOT a system message */}
+                        {!isSystemMessage && (
+                            <div className="flex items-center gap-1">
+                                {role === "agent" && (
+                                    <>
+                                        <ActionButton
+                                            variant="icon_agent"
+                                            onClick={() => handleFeedback(1)}
+                                            className={cn(feedbackGiven === 1 && "bg-white/20")}
+                                        >
+                                            <FontAwesomeIcon icon={faThumbsUp} />
+                                        </ActionButton>
+                                        <ActionButton
+                                            variant="icon_agent"
+                                            onClick={() => handleFeedback(0)}
+                                            className={cn(feedbackGiven === 0 && "bg-white/20")}
+                                        >
+                                            <FontAwesomeIcon icon={faThumbsDown} />
+                                        </ActionButton>
+                                    </>
+                                )}
+                                {/* Copy Button */}
                                 <ActionButton
-                                    variant="icon"
+                                    variant={role === "user" ? "icon_user" : "icon_agent"}
                                     onClick={() => onCopy?.(typeof content === 'string' ? content : getTextContent(content))}
                                 >
                                     <FontAwesomeIcon icon={faCopy} />
                                 </ActionButton>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -410,7 +414,7 @@ function ChatContent() {
             }
         } catch (err: any) {
             removeLoadingMessage()
-            addMessage("agent", err.response?.data?.detail || "Failed to start generation.")
+            addMessage("agent", err.response?.data?.detail || "Failed to start generation.", false, undefined, true)
             setIsLoading(false)
         }
     }
@@ -436,7 +440,7 @@ function ChatContent() {
                     </ExplorerLink>
                 </motion.div>
             </div>
-        ))
+        ), false, undefined, true)
 
         // After a short delay, show scan type selection
         setTimeout(() => {
@@ -483,7 +487,7 @@ function ChatContent() {
                     </motion.div>
                 </div>
             </div>
-        ))
+        ), false, undefined, true)
     }
 
     // Handle scan type button click
@@ -500,7 +504,7 @@ function ChatContent() {
 
 
 
-    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false, traceId?: string) => {
+    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false, traceId?: string, isSystemMessage = false) => {
         setMessages(prev => [
             ...prev.filter(m => m.content !== "collecting" && m.content !== "thinking"),
             {
@@ -509,7 +513,8 @@ function ChatContent() {
                 content,
                 timestamp: new Date(),
                 isStreaming,
-                traceId
+                traceId,
+                isSystemMessage
             }
         ])
     }
@@ -707,12 +712,12 @@ function ChatContent() {
                 handleAddressReceived(text)
             } else if (pendingAddress) {
                 // User typed something else while we have a pending address
-                addMessage("agent", "Please select one of the scan options above, or paste a new TON address.")
+                addMessage("agent", "Please select one of the scan options above, or paste a new TON address.", false, undefined, true)
             } else {
                 setIsLoading(true)
                 setTimeout(() => {
                     setIsLoading(false)
-                    addMessage("agent", "I'm ready to analyze any TON address. Please paste one here!")
+                    addMessage("agent", "I'm ready to analyze any TON address. Please paste one here!", false, undefined, true)
                 }, 800)
             }
             return
@@ -737,7 +742,7 @@ function ChatContent() {
             handleAddressReceived(addressParam)
         } else if (!hasStartedRef.current) {
             hasStartedRef.current = true
-            addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.")
+            addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
         }
     }, [addressParam])
 
@@ -750,7 +755,7 @@ function ChatContent() {
                         {messages.map((msg) => (
                             <div key={msg.id}>
                                 {msg.content === "collecting" ? (
-                                    <MessageBubble role="agent" timestamp={msg.timestamp} userPhotoUrl={user?.photo_url} content={
+                                    <MessageBubble role="agent" timestamp={msg.timestamp} userPhotoUrl={user?.photo_url} isSystemMessage={true} content={
                                         <div className="flex items-center gap-4">
                                             <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
                                                 <FontAwesomeIcon icon={faSpinner} className="animate-spin text-white/80 text-xl" />
@@ -790,6 +795,7 @@ function ChatContent() {
                                         traceId={msg.traceId}
                                         onFeedback={handleFeedback}
                                         onCopy={handleCopy}
+                                        isSystemMessage={msg.isSystemMessage}
                                     />
                                 )}
                             </div>
