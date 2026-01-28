@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mangum import Mangum
 from mangum import Mangum
-from agent import process_chat, process_chat_stream, langfuse
+from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
 
 app = FastAPI()
 app.add_middleware(
@@ -319,15 +319,19 @@ async def score_trace(request: ScoreRequest):
     """
     print(f"[SCORE] Received score for trace {request.trace_id}: {request.score}")
     try:
-        langfuse.score(
+        langfuse.create_score(
             trace_id=request.trace_id,
             name=request.name or "user-feedback",
             value=request.score,
             comment=request.comment
         )
+        # Flush to ensure score is sent immediately
+        flush_langfuse()
         return {"status": "success"}
     except Exception as e:
         print(f"[SCORE] Error recording score: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 

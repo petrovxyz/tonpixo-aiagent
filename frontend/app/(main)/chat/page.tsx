@@ -141,8 +141,9 @@ const MessageBubble = ({
     const handleFeedback = (score: number) => {
         if (feedbackGiven !== null) return
         setFeedbackGiven(score)
-        if (traceId && onFeedback) {
-            onFeedback(score, traceId)
+        if (onFeedback) {
+            // Always call onFeedback - let parent handle missing traceId
+            onFeedback(score, traceId || '')
         }
     }
 
@@ -321,6 +322,11 @@ function ChatContent() {
     }
 
     const handleFeedback = async (score: number, traceId: string) => {
+        if (!traceId) {
+            console.warn("Feedback attempted without traceId")
+            showToast("Unable to save feedback - try again", "error")
+            return
+        }
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
             await axios.post(`${apiUrl}/api/score`, {
@@ -628,10 +634,10 @@ function ChatContent() {
                                         : m
                                 ))
                             } else if (data.type === "done") {
-                                // Finalize the message
+                                // Finalize the message - preserve traceId
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
+                                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date(), traceId: m.traceId }
                                         : m
                                 ))
                                 setStreamingContent("")
@@ -659,11 +665,11 @@ function ChatContent() {
                 }
             }
 
-            // If we got content but no "done" event, finalize anyway
+            // If we got content but no "done" event, finalize anyway - preserve traceId
             if (accumulatedContent) {
                 setMessages(prev => prev.map(m =>
                     m.id === streamingMsgId
-                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date() }
+                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date(), traceId: m.traceId }
                         : m
                 ))
                 streamingMsgIdRef.current = null
