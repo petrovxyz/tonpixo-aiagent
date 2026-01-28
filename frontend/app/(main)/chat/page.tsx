@@ -366,18 +366,18 @@ function ChatContent() {
                             </AnimatedText>
                         </p>
                     </div>
-                ))
+                ), false, undefined, true)
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job completed, clear active job
             } else if (data.status === "empty") {
                 setIsLoading(false)
                 removeLoadingMessage()
-                addMessage("agent", `I couldn't find any ${getScanTypeLabel(scanType)} for this address.`)
+                addMessage("agent", `I couldn't find any ${getScanTypeLabel(scanType)} for this address.`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
             } else if (data.status === "error") {
                 setIsLoading(false)
                 removeLoadingMessage()
-                addMessage("agent", `Error: ${data.error || "Failed to generate history"}`)
+                addMessage("agent", `Error: ${data.error || "Failed to generate history"}`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
             } else if (data.status === "cancelled") {
                 setIsLoading(false)
@@ -387,7 +387,7 @@ function ChatContent() {
         } catch (err) {
             setIsLoading(false)
             removeLoadingMessage()
-            addMessage("agent", "Connection to background service lost.")
+            addMessage("agent", "Connection to background service lost.", false, undefined, true)
         }
     }
 
