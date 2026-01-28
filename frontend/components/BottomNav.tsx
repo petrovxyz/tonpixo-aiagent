@@ -17,7 +17,7 @@ export function BottomNav() {
     const router = useRouter()
 
     return (
-        <div className="fixed bottom-10 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
+        <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
             <div className="bg-[#4FC3F7] rounded-full border-2 border-white/20 p-1.5 flex items-center relative shadow-2xl pointer-events-auto w-full max-w-sm inset-shadow-sm inset-shadow-white/30">
                 {NAV_ITEMS.map((item) => {
                     const isActive = pathname === item.path
