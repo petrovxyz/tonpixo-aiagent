@@ -260,14 +260,14 @@ const MessageBubble = ({
                                         <ActionButton
                                             variant="icon_agent"
                                             onClick={() => handleFeedback(1)}
-                                            className={cn(feedbackGiven === 1 && "bg-white/20")}
+                                            className={cn(feedbackGiven === 1 && "bg-white/30 border border-white/50")}
                                         >
                                             <FontAwesomeIcon icon={faThumbsUp} />
                                         </ActionButton>
                                         <ActionButton
                                             variant="icon_agent"
                                             onClick={() => handleFeedback(0)}
-                                            className={cn(feedbackGiven === 0 && "bg-white/20")}
+                                            className={cn(feedbackGiven === 0 && "bg-white/30 border border-white/50")}
                                         >
                                             <FontAwesomeIcon icon={faThumbsDown} />
                                         </ActionButton>

@@ -1,14 +1,10 @@
 import os
 import uuid
 import boto3
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for server
-import matplotlib.pyplot as plt
+import boto3
 from io import StringIO, BytesIO
-from typing import Annotated, TypedDict, Literal
+from typing import Annotated, TypedDict, Literal, Any, TYPE_CHECKING
 from botocore.config import Config
-from langchain_aws import ChatBedrock
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
@@ -16,6 +12,10 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from langchain_aws import ChatBedrock
 
 # Configuration
 BUCKET_NAME = os.environ.get('DATA_BUCKET')
@@ -38,7 +38,7 @@ bedrock_runtime = boto3.client('bedrock-runtime', config=BEDROCK_RETRY_CONFIG)
 langfuse = get_client()
 
 # Global dataframe cache for the current session
-_dataframe_cache: dict[str, pd.DataFrame] = {}
+_dataframe_cache: dict[str, Any] = {}
 
 
 def create_langfuse_handler() -> LangfuseCallbackHandler:
@@ -73,8 +73,9 @@ def flush_langfuse():
         print(f"Failed to flush Langfuse: {e}")
 
 
-def get_csv_from_s3(job_id: str) -> pd.DataFrame:
+def get_csv_from_s3(job_id: str) -> "pd.DataFrame":
     """Download CSV from S3 and load into DataFrame."""
+    import pandas as pd
     # Check cache first
     if job_id in _dataframe_cache:
         return _dataframe_cache[job_id]
@@ -142,6 +143,7 @@ class AgentState(TypedDict):
 
 def create_data_tools(job_id: str):
     """Create tools with access to the specific job's dataframe."""
+    import pandas as pd
     
     @tool
     def get_dataframe_info() -> str:
@@ -298,6 +300,13 @@ def create_data_tools(job_id: str):
             - Histogram of transaction amounts: create_chart(chart_type='histogram', title='Amount Distribution', x_column='amount')
         """
         try:
+            import matplotlib
+            try:
+                matplotlib.use('Agg')
+            except:
+                pass
+            import matplotlib.pyplot as plt
+
             df = get_csv_from_s3(job_id)
             
             # Set up the Tonpixo dark theme style
@@ -552,6 +561,7 @@ def create_agent_graph(job_id: str):
     """Create a LangGraph agent for analyzing financial data."""
     
     # Initialize LLM
+    from langchain_aws import ChatBedrock
     llm = ChatBedrock(
         model_id="arn:aws:bedrock:us-east-1:156027872245:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0",
         provider="anthropic",
@@ -758,11 +768,24 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
         }
         
         # Stream the agent execution with Langfuse callback and metadata
-        # Track whether we're still in "thinking" mode (before final answer)
-        # Tokens before tool calls = thinking, tokens after all tools done = answer
+        # 
+        # STRATEGY: Stream tokens in real-time with smart classification.
+        # 
+        # The challenge: We don't know if text after a tool_end is the final answer
+        # or just thinking before another tool call. 
+        # 
+        # Solution: Buffer text after each tool_end, and:
+        # - If another tool_start comes → flush buffer as "thinking" events
+        # - When streaming ends → flush remaining buffer as "token" (answer) events
+        # 
+        # For text BEFORE any tools → it's initial thinking
+        # For text DURING tool execution → it's thinking
+        # For text AFTER all tools → it's the answer
+        
         tools_used = False
-        all_tools_done = False
         pending_tool_count = 0
+        # Buffer for text that might be thinking or might be answer
+        post_tool_buffer: list[str] = []
         
         async for event in agent.astream_events(
             initial_state, 
@@ -798,24 +821,41 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
                                 text_content += block.text
                     
                     if text_content:
-                        # If tools have been used and all are done, this is the answer
-                        # If no tools used yet or tools still pending, this is thinking
-                        if tools_used and pending_tool_count == 0:
-                            yield {"type": "token", "content": text_content}
-                        else:
+                        if not tools_used:
+                            # Before any tools - could be thinking or direct answer
+                            # Buffer it - will be classified at the end
+                            post_tool_buffer.append(text_content)
+                        elif pending_tool_count > 0:
+                            # Tool is running - this is definitely thinking/commentary
                             yield {"type": "thinking", "content": text_content}
+                        else:
+                            # Tools are done but we don't know if more tools will come
+                            # Buffer this text until we know
+                            post_tool_buffer.append(text_content)
             
             elif kind == "on_tool_start":
-                # Tool is starting
+                # Tool is starting - any buffered text was thinking!
                 tools_used = True
                 pending_tool_count += 1
                 tool_name = event["name"]
+                
+                # Flush buffer as thinking
+                for buffered_text in post_tool_buffer:
+                    yield {"type": "thinking", "content": buffered_text}
+                post_tool_buffer = []
+                
                 yield {"type": "tool_start", "tool": tool_name}
             
             elif kind == "on_tool_end":
                 # Tool finished
                 pending_tool_count = max(0, pending_tool_count - 1)
                 yield {"type": "tool_end", "tool": event["name"]}
+        
+        # Stream ended - flush remaining buffer
+        # If tools were used, buffer contains the final answer
+        # If no tools were used, buffer contains the entire response (is it answer? probably)
+        for buffered_text in post_tool_buffer:
+            yield {"type": "token", "content": buffered_text}
         
         # Yield trace_id if available - try different attributes
         trace_id = None
