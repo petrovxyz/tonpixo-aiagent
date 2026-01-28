@@ -43,8 +43,6 @@ class LoginRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     job_id: str
-class ChatRequest(BaseModel):
-    job_id: str
     question: str
 
 class ScoreRequest(BaseModel):
@@ -251,7 +249,6 @@ async def cancel_job(job_id: str):
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     print(f"[CHAT] Received question for job {request.job_id}: {request.question}")
-    try:
     try:
         result = process_chat(request.job_id, request.question)
         return {"answer": result["content"], "trace_id": result["trace_id"], "status": "success"}
