@@ -20,6 +20,7 @@ interface Message {
     timestamp: Date
     isStreaming?: boolean
     streamingText?: string  // Track the actual text being streamed
+    thinkingText?: string   // Track agent's thinking/reasoning before answer
     isAnalyzing?: boolean   // Track if agent is using tools
     traceId?: string        // Langfuse trace ID for feedback
     isSystemMessage?: boolean // Flag for system messages (no actions)
@@ -124,7 +125,8 @@ const MessageBubble = ({
     traceId,
     onFeedback,
     onCopy,
-    isSystemMessage = false
+    isSystemMessage = false,
+    thinkingText
 }: {
     role: "user" | "agent"
     content: React.ReactNode
@@ -135,8 +137,10 @@ const MessageBubble = ({
     onFeedback?: (score: number, traceId: string) => void
     onCopy?: (text: string) => void
     isSystemMessage?: boolean
+    thinkingText?: string
 }) => {
     const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null)
+    const [showThinking, setShowThinking] = useState(false)
 
     const handleFeedback = (score: number) => {
         if (feedbackGiven !== null) return
@@ -186,6 +190,40 @@ const MessageBubble = ({
                     : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
                 isStreaming && "min-h-[60px]"
             )}>
+                {/* Collapsible Thinking Section */}
+                {role === "agent" && thinkingText && (
+                    <div className="mb-3">
+                        <button
+                            onClick={() => setShowThinking(!showThinking)}
+                            className="flex items-center gap-2 text-xs text-white/60 hover:text-white/80 transition-colors"
+                        >
+                            <motion.span
+                                animate={{ rotate: showThinking ? 90 : 0 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                                    <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                                </svg>
+                            </motion.span>
+                            <span>Thinking</span>
+                        </button>
+                        <AnimatePresence>
+                            {showThinking && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="mt-2 pl-4 border-l-2 border-white/20 text-sm text-white/60 italic">
+                                        {thinkingText}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                )}
                 <motion.div
                     initial={role === "agent" && !isStreaming ? "hidden" : "visible"}
                     animate="visible"
@@ -594,6 +632,7 @@ function ChatContent() {
 
             const decoder = new TextDecoder()
             let accumulatedContent = ""
+            let accumulatedThinking = ""
             let currentlyAnalyzing = false
             let buffer = ""
             let chunkCount = 0
@@ -645,7 +684,16 @@ function ChatContent() {
                                 // Update the streaming message with new content
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, streamingText: accumulatedContent, isAnalyzing: currentlyAnalyzing }
+                                        ? { ...m, streamingText: accumulatedContent, thinkingText: accumulatedThinking || undefined, isAnalyzing: currentlyAnalyzing }
+                                        : m
+                                ))
+                            } else if (data.type === "thinking") {
+                                // Accumulate thinking/reasoning content
+                                accumulatedThinking += data.content
+                                // Update message with thinking content
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, thinkingText: accumulatedThinking, isAnalyzing: currentlyAnalyzing }
                                         : m
                                 ))
                             } else if (data.type === "tool_start") {
@@ -667,11 +715,20 @@ function ChatContent() {
                                         : m
                                 ))
                             } else if (data.type === "done") {
-                                console.log("[STREAM] Got done event, finalizing with content length:", accumulatedContent.length)
-                                // Finalize the message - preserve traceId
+                                console.log("[STREAM] Got done event, finalizing with content length:", accumulatedContent.length, "thinking length:", accumulatedThinking.length)
+                                // Finalize the message - preserve traceId and thinking
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
-                                        ? { ...m, content: accumulatedContent, isStreaming: false, streamingText: undefined, isAnalyzing: false, timestamp: new Date(), traceId: m.traceId }
+                                        ? {
+                                            ...m,
+                                            content: accumulatedContent,
+                                            thinkingText: accumulatedThinking || undefined,
+                                            isStreaming: false,
+                                            streamingText: undefined,
+                                            isAnalyzing: false,
+                                            timestamp: new Date(),
+                                            traceId: m.traceId
+                                        }
                                         : m
                                 ))
                                 setStreamingContent("")
@@ -842,6 +899,7 @@ function ChatContent() {
                                         onFeedback={handleFeedback}
                                         onCopy={handleCopy}
                                         isSystemMessage={msg.isSystemMessage}
+                                        thinkingText={msg.thinkingText}
                                     />
                                 )}
                             </div>

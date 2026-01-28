@@ -758,6 +758,12 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
         }
         
         # Stream the agent execution with Langfuse callback and metadata
+        # Track whether we're still in "thinking" mode (before final answer)
+        # Tokens before tool calls = thinking, tokens after all tools done = answer
+        tools_used = False
+        all_tools_done = False
+        pending_tool_count = 0
+        
         async for event in agent.astream_events(
             initial_state, 
             {
@@ -792,15 +798,23 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
                                 text_content += block.text
                     
                     if text_content:
-                        yield {"type": "token", "content": text_content}
+                        # If tools have been used and all are done, this is the answer
+                        # If no tools used yet or tools still pending, this is thinking
+                        if tools_used and pending_tool_count == 0:
+                            yield {"type": "token", "content": text_content}
+                        else:
+                            yield {"type": "thinking", "content": text_content}
             
             elif kind == "on_tool_start":
                 # Tool is starting
+                tools_used = True
+                pending_tool_count += 1
                 tool_name = event["name"]
                 yield {"type": "tool_start", "tool": tool_name}
             
             elif kind == "on_tool_end":
                 # Tool finished
+                pending_tool_count = max(0, pending_tool_count - 1)
                 yield {"type": "tool_end", "tool": event["name"]}
         
         # Yield trace_id if available - try different attributes
