@@ -607,8 +607,23 @@ function ChatContent() {
                 }
 
                 chunkCount++
-                const text = decoder.decode(value, { stream: true })
+                let text = decoder.decode(value, { stream: true })
                 console.log("[STREAM] Chunk", chunkCount, "raw text:", text.substring(0, 200))
+
+                // Check if response is wrapped in Lambda proxy format (Mangum quirk)
+                // This happens when Lambda Function URL returns a proxy response instead of raw streaming
+                if (text.startsWith('{"statusCode":') || text.startsWith('{"statusCode":')) {
+                    try {
+                        const proxyResponse = JSON.parse(text)
+                        if (proxyResponse.body) {
+                            console.log("[STREAM] Detected Lambda proxy response, extracting body")
+                            text = proxyResponse.body
+                        }
+                    } catch {
+                        // Not a complete JSON, might be partial - continue with raw text
+                    }
+                }
+
                 buffer += text
 
                 // Split by newline, but keep the last segment in the buffer as it might be incomplete
