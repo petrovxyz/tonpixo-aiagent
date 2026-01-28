@@ -74,6 +74,10 @@ Resources:
         - x86_64
       Environment:
         Variables:
+          # Lambda Web Adapter configuration for response streaming
+          AWS_LWA_INVOKE_MODE: RESPONSE_STREAM
+          AWS_LWA_PORT: 8080
+          # Application configuration
           JOBS_TABLE: !Ref JobsTable
           USERS_TABLE: !Ref UsersTable
           JOBS_QUEUE_URL: !Ref JobsQueue

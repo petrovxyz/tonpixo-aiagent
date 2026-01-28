@@ -8,45 +8,23 @@ load_dotenv()
 import uuid
 import json
 import asyncio
+import uvicorn
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from mangum import Mangum
-from mangum import Mangum
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
 
 app = FastAPI()
 
-# Pure ASGI middleware for CORS - doesn't buffer responses (important for streaming!)
-# BaseHTTPMiddleware buffers responses which breaks SSE streaming
-@app.middleware("http")
-async def cors_middleware(request: Request, call_next):
-    # Handle preflight OPTIONS requests
-    if request.method == "OPTIONS":
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "86400",
-            }
-        )
-    
-    response = await call_next(request)
-    
-    # Skip adding CORS headers for streaming endpoint - Lambda Function URL handles it
-    if request.url.path == "/api/chat/stream":
-        return response
-    
-    # Add CORS headers for other endpoints (going through API Gateway)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    
-    return response
+# CORS middleware - Lambda Web Adapter handles HTTP properly so standard middleware works
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 sqs = boto3.client('sqs')
 dynamodb = boto3.resource('dynamodb')
 
@@ -358,4 +336,8 @@ async def score_trace(request: ScoreRequest):
         return {"status": "error", "message": str(e)}
 
 
-handler = Mangum(app)
+# Lambda Web Adapter: Run FastAPI with uvicorn
+# The adapter starts the app and translates Lambda events to HTTP requests
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)

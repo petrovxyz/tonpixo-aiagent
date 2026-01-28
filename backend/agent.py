@@ -700,12 +700,14 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
         # Flush Langfuse to ensure traces are sent (important for Lambda)
         flush_langfuse()
         
-        # Get trace_id from handler if available
+        # Get trace_id from handler if available - use last_trace_id first (Langfuse v3)
         trace_id = None
-        if hasattr(langfuse_handler, "get_trace_id"):
+        if hasattr(langfuse_handler, "last_trace_id") and langfuse_handler.last_trace_id:
+            trace_id = langfuse_handler.last_trace_id
+        elif hasattr(langfuse_handler, "get_trace_id"):
             trace_id = langfuse_handler.get_trace_id()
         elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
-             trace_id = langfuse_handler.trace.id
+            trace_id = langfuse_handler.trace.id
         
         # Extract final answer from the last AI message
         answer = "I couldn't generate a response."
@@ -801,15 +803,30 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
                 # Tool finished
                 yield {"type": "tool_end", "tool": event["name"]}
         
-        # Yield trace_id if available
+        # Yield trace_id if available - try different attributes
         trace_id = None
-        if hasattr(langfuse_handler, "get_trace_id"):
+        print(f"[STREAM] Attempting to get trace_id from handler")
+        
+        # In Langfuse v3, use last_trace_id (documented attribute)
+        if hasattr(langfuse_handler, "last_trace_id") and langfuse_handler.last_trace_id:
+            trace_id = langfuse_handler.last_trace_id
+            print(f"[STREAM] Got trace_id from last_trace_id: {trace_id}")
+        elif hasattr(langfuse_handler, "get_trace_id"):
             trace_id = langfuse_handler.get_trace_id()
+            print(f"[STREAM] Got trace_id from get_trace_id(): {trace_id}")
         elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
-             trace_id = langfuse_handler.trace.id
+            trace_id = langfuse_handler.trace.id
+            print(f"[STREAM] Got trace_id from trace.id: {trace_id}")
+        elif hasattr(langfuse_handler, "trace_id") and langfuse_handler.trace_id:
+            trace_id = langfuse_handler.trace_id
+            print(f"[STREAM] Got trace_id from trace_id attr: {trace_id}")
+        else:
+            print(f"[STREAM] Could not find trace_id - handler has: {[a for a in dir(langfuse_handler) if 'trace' in a.lower()]}")
              
         if trace_id:
             yield {"type": "trace_id", "content": trace_id}
+        else:
+            print("[STREAM] WARNING: No trace_id available to yield")
             
         # Flush Langfuse to ensure traces are sent (important for Lambda)
         flush_langfuse()

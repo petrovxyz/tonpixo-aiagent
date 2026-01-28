@@ -610,13 +610,13 @@ function ChatContent() {
                 let text = decoder.decode(value, { stream: true })
                 console.log("[STREAM] Chunk", chunkCount, "raw text:", text.substring(0, 200))
 
-                // Check if response is wrapped in Lambda proxy format (Mangum quirk)
-                // This happens when Lambda Function URL returns a proxy response instead of raw streaming
-                if (text.startsWith('{"statusCode":') || text.startsWith('{"statusCode":')) {
+                // Fallback: Check if response is wrapped in Lambda proxy format (old Mangum behavior)
+                // Lambda Web Adapter should send proper streaming, but keep this as fallback
+                if (text.startsWith('{"statusCode":')) {
                     try {
                         const proxyResponse = JSON.parse(text)
                         if (proxyResponse.body) {
-                            console.log("[STREAM] Detected Lambda proxy response, extracting body")
+                            console.log("[STREAM] Detected Lambda proxy response (fallback), extracting body")
                             text = proxyResponse.body
                         }
                     } catch {
