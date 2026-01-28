@@ -56,7 +56,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                 filter: isInitialLoading ? "blur(10px)" : "blur(0px)"
             }}
             transition={{ duration: 1.2, ease: [0.43, 0.13, 0.23, 0.96] }}
-            className="min-h-screen text-white font-sans overflow-hidden relative selection:bg-white/30 flex flex-col"
+            className="min-h-screen text-white font-sans overflow-hidden relative selection:bg-blue-300 flex flex-col"
         >
             {/* Background elements (blurred shapes only, main gradient is in RootLayout) */}
             <div className="fixed top-[-20%] left-[-10%] w-[800px] h-[800px] bg-white/10 rounded-full blur-[120px] pointer-events-none z-0" />

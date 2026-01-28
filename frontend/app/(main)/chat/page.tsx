@@ -622,7 +622,7 @@ function ChatContent() {
         <div className="relative w-full h-[100dvh] flex flex-col">
             {/* Main Scrollable Area */}
             <div className="flex-1 overflow-y-auto z-10 scroll-smooth scrollbar-hide">
-                <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col justify-end pt-32 pb-32">
+                <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col justify-end pt-38 pb-32">
                     <AnimatePresence initial={false}>
                         {messages.map((msg) => (
                             <div key={msg.id}>
@@ -675,8 +675,13 @@ function ChatContent() {
 
             {/* Header */}
             <div className="fixed top-0 left-0 right-0 z-20 pointer-events-none">
-                <div className="max-w-3xl mx-auto w-full px-4">
+                {/* Backdrop */}
+                <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#4FC3F7]/80 via-[#4FC3F7]/40 to-transparent -z-10" />
+
+
+                <div className="max-w-3xl mx-auto w-full px-4 relative">
                     <div className="flex items-center gap-2 pointer-events-auto">
+
                         <button
                             onClick={() => router.push("/explore")}
                             className={cn(
@@ -694,7 +699,12 @@ function ChatContent() {
 
             {/* Input Area */}
             <div className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">
-                <div className="max-w-2xl mx-auto w-full p-6 pb-10 md:pb-12 pointer-events-auto">
+                {/* Backdrop */}
+                <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#29B6F6]/80 via-[#29B6F6]/40 to-transparent -z-10" />
+
+
+                <div className="max-w-2xl mx-auto w-full p-6 pb-10 md:pb-12 pointer-events-auto relative">
+
                     <div className="relative group">
                         <div className="absolute inset-0 rounded-full" />
                         <div className="relative bg-[#4FC3F7] border border-white/20 rounded-full p-2 flex items-center shadow-2xl transition-all ring-1 ring-white/10 inset-shadow-sm inset-shadow-white/30">
