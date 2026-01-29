@@ -556,7 +556,7 @@ function ChatContent() {
                 ), false, undefined, true)
             } else {
                 const data = response.data
-                const lastActivity = new Date(data.last_activity * 1000).toLocaleString()
+                const lastActivity = data.last_activity * 1000
                 const balance = (data.balance / 1000000000).toFixed(2)
 
                 addMessage("agent", (
@@ -568,7 +568,7 @@ function ChatContent() {
                                 <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
                                 <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.is_wallet ? "yes" : "no"}</span>
                                 <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
-                                <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity}</span>
+                                <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity} UTC</span>
 
                                 <span className="text-white"><span className="font-semibold">Balance:</span> {balance} TON</span>
 
