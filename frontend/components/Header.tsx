@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
@@ -15,9 +16,9 @@ export function Header({ className }: { className?: string }) {
             {showUser && (
                 <motion.div
                     layout
-                    className="w-14 h-14 rounded-full overflow-hidden border-2 border-white/30 shadow-lg pointer-events-auto"
+                    className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white/30 shadow-lg pointer-events-auto"
                 >
-                    <img src={user?.photo_url} alt="User" className="w-full h-full object-cover" />
+                    <Image src={user?.photo_url || ""} alt="User" fill className="object-cover" unoptimized />
                 </motion.div>
             )}
 
@@ -26,8 +27,8 @@ export function Header({ className }: { className?: string }) {
                 className="z-20 pointer-events-auto bg-[#4FC3F7] flex justify-center rounded-full py-2 border-2 border-white/20 inset-shadow-sm inset-shadow-white/30"
             >
                 <div className="flex items-center gap-2 text-[26px] font-extrabold font-sans tracking-tight px-6">
-                    <div className="w-8 h-8">
-                        <img src="/logo.svg" alt="Tonpixo Logo" className="w-full h-full object-contain" />
+                    <div className="relative w-8 h-8">
+                        <Image src="/logo.svg" alt="Tonpixo Logo" fill className="object-contain" />
                     </div>
                     <span className="text-black">tonpixo</span>
                 </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
+import Image from "next/image"
 import { motion, PanInfo } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTimes } from "@fortawesome/free-solid-svg-icons"
@@ -80,10 +81,12 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                 <div className="flex flex-col h-full overflow-y-auto pb-8">
                     {/* Image Section */}
                     <div className="relative w-full h-50 bg-gray-100 shrink-0 rounded-t-3xl">
-                        <img
+                        <Image
                             src={item.image}
                             alt={item.question}
-                            className="w-full h-full object-cover"
+                            fill
+                            className="object-cover"
+                            unoptimized
                         />
                     </div>
 

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import Image from "next/image"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
@@ -87,19 +88,23 @@ function ChartImage({ src }: { src: string }) {
                             <FontAwesomeIcon icon={faSpinner} className="animate-spin text-[#4FC3F7] text-2xl" />
                         </div>
                     )}
-                    <img
+                    <Image
                         src={src}
                         alt="Chart"
+                        width={0}
+                        height={0}
+                        sizes="100vw"
+                        style={{ width: '100%', height: 'auto' }}
                         className={cn(
-                            "w-full h-auto transition-opacity duration-300",
+                            "transition-opacity duration-300",
                             isLoading ? "opacity-0" : "opacity-100"
                         )}
-                        loading="lazy"
                         onLoad={() => setIsLoading(false)}
                         onError={() => {
                             setIsLoading(false)
                             setHasError(true)
                         }}
+                        unoptimized
                     />
                     {/* Always visible expand indicator */}
                     {!isLoading && (
@@ -128,12 +133,14 @@ function ChartImage({ src }: { src: string }) {
                     </div>
 
                     {/* Image container with pinch-to-zoom hint */}
-                    <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-                        <img
+                    <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
+                        <Image
                             src={src}
                             alt="Chart"
-                            className="max-w-full max-h-full object-contain rounded-xl"
+                            fill
+                            className="object-contain rounded-xl"
                             onClick={(e) => e.stopPropagation()}
+                            unoptimized
                         />
                     </div>
 
@@ -402,11 +409,15 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
                 return <ChartImage src={imgSrc} />
             }
             return (
-                <img
+                <Image
                     src={imgSrc}
                     alt={alt || ''}
-                    className="max-w-full h-auto rounded-lg my-3"
-                    loading="lazy"
+                    width={0}
+                    height={0}
+                    sizes="100vw"
+                    style={{ width: '100%', height: 'auto' }}
+                    className="rounded-lg my-3"
+                    unoptimized
                 />
             )
         },

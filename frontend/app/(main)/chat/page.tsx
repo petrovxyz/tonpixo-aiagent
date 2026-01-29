@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy } from "@fortawesome/free-solid-svg-icons"
@@ -169,13 +170,13 @@ const MessageBubble = ({
         >
             {role === "agent" && (
                 <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    <img src="/logo.svg" alt="Agent" className="w-6 h-6 object-contain" />
+                    <Image src="/logo.svg" alt="Agent" width={24} height={24} className="object-contain" />
                 </div>
             )}
             {role === "user" && (
-                <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
+                <div className="relative w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
                     {userPhotoUrl ? (
-                        <img src={userPhotoUrl} alt="User" className="w-full h-full object-cover" />
+                        <Image src={userPhotoUrl} alt="User" fill className="object-cover" unoptimized />
                     ) : (
                         <div className="w-full h-full bg-gradient-to-br from-[#4FC3F7] to-[#0098EA] flex items-center justify-center text-white font-bold text-sm">
                             U
