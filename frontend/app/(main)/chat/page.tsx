@@ -303,6 +303,7 @@ function ChatContent() {
     const [inputValue, setInputValue] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [count, setCount] = useState<number>(0)
+    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
     const [jobId, setJobId] = useState<string | null>(null)
     const [streamingContent, setStreamingContent] = useState("")
     const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -944,7 +945,48 @@ function ChatContent() {
 
                     <div className="relative group">
                         <div className="absolute inset-0 rounded-full" />
-                        <div className="relative bg-[#4FC3F7] border border-white/20 rounded-full p-2 flex items-center shadow-2xl transition-all ring-1 ring-white/10 inset-shadow-sm inset-shadow-white/30">
+                        <div
+                            onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                const y = e.clientY - rect.top;
+                                const size = Math.max(rect.width, rect.height);
+
+                                const ripple = {
+                                    id: Date.now(),
+                                    x,
+                                    y,
+                                    size
+                                };
+
+                                setRipples((prev) => [...prev, ripple]);
+                            }}
+                            className="relative bg-[#4FC3F7] border border-white/20 rounded-full p-2 flex items-center shadow-2xl transition-all ring-1 ring-white/10 inset-shadow-sm inset-shadow-white/30 overflow-hidden"
+                        >
+                            <AnimatePresence>
+                                {ripples.map((ripple) => (
+                                    <motion.span
+                                        key={ripple.id}
+                                        initial={{ scale: 0, opacity: 0.35 }}
+                                        animate={{ scale: 4, opacity: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.8, ease: "easeOut" }}
+                                        onAnimationComplete={() => {
+                                            setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+                                        }}
+                                        className="absolute bg-white/50 rounded-full pointer-events-none"
+                                        style={{
+                                            left: ripple.x,
+                                            top: ripple.y,
+                                            width: ripple.size,
+                                            height: ripple.size,
+                                            marginLeft: -ripple.size / 2,
+                                            marginTop: -ripple.size / 2,
+                                        }}
+                                    />
+                                ))}
+                            </AnimatePresence>
+
                             <input
                                 ref={inputRef}
                                 type="text"
@@ -953,13 +995,16 @@ function ChatContent() {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Ask something..."
                                 disabled={isLoading && messages.some(m => m.content === "collecting")}
-                                className="flex-1 bg-transparent border-none outline-none px-5 py-3.5 text-white placeholder:text-white/40 text-base md:text-lg min-w-0 font-medium"
+                                className="flex-1 bg-transparent border-none outline-none px-5 py-3.5 text-white placeholder:text-white/40 text-base md:text-lg min-w-0 font-medium z-10"
                                 autoComplete="off"
                             />
                             <button
-                                onClick={handleSend}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSend();
+                                }}
                                 disabled={!inputValue.trim() || (isLoading && messages.some(m => m.content === "collecting"))}
-                                className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white hover:bg-gray-100 text-[#0098EA] rounded-full active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg cursor-pointer"
+                                className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white hover:bg-gray-100 text-[#0098EA] rounded-full active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg cursor-pointer z-10"
                             >
                                 <FontAwesomeIcon icon={faArrowUp} className="text-xl" />
                             </button>

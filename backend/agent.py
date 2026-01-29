@@ -315,13 +315,13 @@ If the user asks for a chart, graph, or visualization:
 4. You MUST include this JSON string in your final answer, wrapped in a markdown code block with the language `json:chart`.
    Example:
    ```json:chart
-   {
+   {{
        "type": "bar",
        "title": "Transaction Volume",
-       "data": [{"date": "2023-01-01", "volume": 100}, ...],
+       "data": [{{"date": "2023-01-01", "volume": 100}}, ...],
        "xAxisKey": "date",
        "dataKeys": ["volume"]
-   }
+   }}
    ```
 """
 
