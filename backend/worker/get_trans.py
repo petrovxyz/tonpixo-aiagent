@@ -660,14 +660,16 @@ def fetch_transactions(account_id, api_key=None, limit_events=None, labels_map=N
     return pd.DataFrame(all_data)
 
 
+
+    
 def fetch_jettons(account_id, api_key=None, on_progress=None):
     """
-    Fetch all jetton (token) balances for a wallet.
-    Uses GET /v2/accounts/{account_id}/jettons endpoint.
+    Fetch all jetton (token) balances for a wallet AND the native TON balance.
+    Uses GET /v2/accounts/{account_id}/jettons endpoint and /v2/accounts/{account_id}.
     
     Returns DataFrame with columns:
-    - jetton_address: Master contract address of the jetton
-    - symbol: Token symbol (e.g., USDT, NOT)
+    - jetton_address: Master contract address of the jetton (or 'native' for TON)
+    - symbol: Token symbol (e.g., USDT, NOT, TON)
     - name: Full token name
     - balance: Human-readable balance (adjusted for decimals)
     - balance_raw: Raw balance in smallest units
@@ -677,6 +679,7 @@ def fetch_jettons(account_id, api_key=None, on_progress=None):
     - verified: Whether the token is verified
     - image_url: Token logo URL
     - wallet_address: Jetton wallet address for this account
+    - type: 'native' or 'jetton'
     """
     base_url = f"https://tonapi.io/v2/accounts/{account_id}/jettons"
     headers = {"Content-Type": "application/json"}
@@ -684,10 +687,53 @@ def fetch_jettons(account_id, api_key=None, on_progress=None):
         headers["Authorization"] = f"Bearer {api_key}"
     
     all_data = []
+    
+    # 1. Fetch Native TON Balance
+    print(f"Fetching native TON balance for {account_id}...")
+    try:
+        account_url = f"https://tonapi.io/v2/accounts/{account_id}"
+        acc_resp = requests.get(account_url, headers=headers)
+        
+        if acc_resp.status_code == 200:
+            acc_data = acc_resp.json()
+            ton_balance_raw = acc_data.get('balance', 0)
+            ton_balance = ton_balance_raw / (10 ** 9)
+            
+            # Fetch TON Price
+            price_usd = 0
+            try:
+                rates_url = "https://tonapi.io/v2/rates?tokens=ton&currencies=usd"
+                rates_resp = requests.get(rates_url, headers=headers)
+                if rates_resp.status_code == 200:
+                    rates_data = rates_resp.json()
+                    price_usd = rates_data.get('rates', {}).get('TON', {}).get('prices', {}).get('USD', 0)
+            except Exception as e:
+                print(f"Error fetching TON price: {e}")
+            
+            ton_record = {
+                'jetton_address': 'native',
+                'symbol': 'TON',
+                'name': 'Toncoin',
+                'balance': ton_balance,
+                'balance_raw': str(ton_balance_raw),
+                'decimals': 9,
+                'price_usd': price_usd,
+                'value_usd': ton_balance * price_usd,
+                'verified': True,
+                'image_url': 'https://ton.org/download/ton_symbol.png',
+                'wallet_address': acc_data.get('address', account_id),
+                'type': 'native'
+            }
+            all_data.append(ton_record)
+            print(f"   Got TON balance: {ton_balance}")
+            
+    except Exception as e:
+        print(f"Error fetching account info: {e}")
+
+    # 2. Fetch Jettons
+    print(f"Fetching jetton balances for {account_id}...")
     offset = 0
     limit = 100
-    
-    print(f"Fetching jetton balances for {account_id}...")
     
     while True:
         params = {
@@ -738,7 +784,8 @@ def fetch_jettons(account_id, api_key=None, on_progress=None):
                     'value_usd': value_usd,
                     'verified': jetton.get('verification') == 'whitelist',
                     'image_url': jetton.get('image', ''),
-                    'wallet_address': item.get('wallet_address', {}).get('address', '')
+                    'wallet_address': item.get('wallet_address', {}).get('address', ''),
+                    'type': 'jetton'
                 }
                 all_data.append(record)
             

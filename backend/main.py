@@ -11,6 +11,7 @@ import uuid
 import json
 import asyncio
 import uvicorn
+import requests
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -34,6 +35,9 @@ users_table = dynamodb.Table(USERS_TABLE_NAME)
 class GenerateRequest(BaseModel):
     address: str
     scan_type: str = "transactions"  # transactions, jettons, nfts
+
+class AccountSummaryRequest(BaseModel):
+    address: str
 
 class LoginRequest(BaseModel):
     initData: str
@@ -217,6 +221,27 @@ async def start_job(request: GenerateRequest):
     sqs.send_message(QueueUrl=QUEUE_URL, MessageBody=message_body)
     
     return {"job_id": job_id, "status": "queued", "scan_type": request.scan_type}
+
+@app.post("/api/account_summary")
+async def get_account_summary(request: AccountSummaryRequest):
+    """Fetch account summary from TON API."""
+    try:
+        api_key = os.environ.get("TONAPI_KEY", "")
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        
+        url = f"https://tonapi.io/v2/accounts/{request.address}"
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"Failed to fetch account info: {response.text}"}
+            
+    except Exception as e:
+        print(f"[ACCOUNT_SUMMARY] Error: {e}")
+        return {"error": str(e)}
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str):

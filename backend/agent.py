@@ -32,6 +32,7 @@ BEDROCK_RETRY_CONFIG = Config(
 
 s3 = boto3.client('s3')
 bedrock_runtime = boto3.client('bedrock-runtime', config=BEDROCK_RETRY_CONFIG)
+dynamodb = boto3.resource('dynamodb')
 
 from utils import get_config_value
 
@@ -109,7 +110,7 @@ def create_data_tools(job_id: str):
                    Table Info:
                    - Table Name: `transactions`
                      Columns:
-                     - datetime (timestamp): Time of transaction
+                     - datetime (timestamp): Time of transaction (UTC)
                      - event_id (string): Unique event ID
                      - type (string): Transaction type (e.g. TON Transfer, Token Transfer, Swap, NFT Transfer)
                      - direction (string): In, Out, Swap, Internal
@@ -133,6 +134,7 @@ def create_data_tools(job_id: str):
                      - price_usd (double): Price per token in USD
                      - value_usd (double): Total value in USD
                      - verified (boolean): Is verified token
+                     - type (string): 'native' (for TON) or 'jetton'
                      - job_id (string): Partition key (Use this in WHERE clause!)
 
                    - Table Name: `nfts`
@@ -272,8 +274,20 @@ def create_agent_graph(job_id: str):
     tools = create_data_tools(job_id)
     llm_with_tools = llm.bind_tools(tools)
     
+    # Fetch job details to get address
+    address = "Unknown"
+    try:
+        jobs_table = dynamodb.Table(os.environ.get('JOBS_TABLE'))
+        response = jobs_table.get_item(Key={'job_id': job_id})
+        address = response.get('Item', {}).get('address', 'Unknown')
+    except Exception as e:
+        print(f"Error fetching job details: {e}")
+    
     # System message for the agent
-    system_prompt = f"""You are Tonpixo – an expert financial data analyst agent in the Telegram mini app. You analyze TON blockchain data using SQL queries.
+    system_prompt = f"""You are Tonpixo – an expert financial data analyst agent in the Telegram mini app. Users provide you a TON wallet address. You analyze TON blockchain data using SQL queries.
+
+The user has provided the following TON wallet address for analysis: {address}. This is not necessarily user's personal address, so never say that it is user or user's personal address.
+This is the address you are analyzing (the 'User' in the context of your analysis).
 
 Your core responsibilities:
 1. Translate user questions into SQL queries for the 'transactions' table.

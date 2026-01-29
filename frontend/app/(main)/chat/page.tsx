@@ -151,7 +151,7 @@ const StreamingMessage = ({
                             <span className="italic">Analyzing data...</span>
                         </div>
                     )}
-                    <div className="break-words [overflow-wrap:break-word] [word-break:keep-all]">
+                    <div className="break-words [overflow-wrap:break-word]">
                         <MarkdownRenderer content={content} isUserMessage={false} isStreaming={true} />
                         <span className="animate-pulse">▊</span>
                     </div>
@@ -280,7 +280,7 @@ const MessageBubble = ({
                             }
                         }
                     }}
-                    className="break-words [overflow-wrap:break-word] [word-break:keep-all]"
+                    className="break-words [overflow-wrap:break-word]"
                 >
                     {typeof content === 'string' ? (
                         <MarkdownRenderer content={content} isUserMessage={role === 'user'} isStreaming={isStreaming} />
@@ -510,27 +510,114 @@ function ChatContent() {
     }
 
     // Handle address detection and show acknowledgment
-    const handleAddressReceived = (address: string) => {
+    const handleAddressReceived = async (address: string) => {
         setPendingAddress(address)
 
-        // Show address acknowledgment with explorer links
-        addMessage("agent", (
-            <div className="flex flex-col gap-4">
-                <p className="text-white">
-                    <AnimatedText isAgent={true}>
-                        Got it! I've received the address. You can explore it by yourself on:
-                    </AnimatedText>
-                </p>
-                <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
-                    <ExplorerLink
-                        href={`https://tonviewer.com/${address}`}
-                        icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
-                    >
-                        Tonviewer
-                    </ExplorerLink>
-                </motion.div>
-            </div>
-        ), false, undefined, true)
+        // Show loading state for wallet info
+        const loadingId = Math.random().toString(36).substr(2, 9)
+        setMessages(prev => [...prev, {
+            id: loadingId,
+            role: "agent",
+            content: (
+                <div className="flex items-center gap-2 text-white/80">
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                    <span>Fetching account details...</span>
+                </div>
+            ),
+            timestamp: new Date(),
+            isSystemMessage: true
+        }])
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const response = await axios.post(`${apiUrl}/api/account_summary`, { address })
+
+            // Remove loading message
+            setMessages(prev => prev.filter(m => m.id !== loadingId))
+
+            if (response.data.error) {
+                // Fallback if error
+                addMessage("agent", (
+                    <div className="flex flex-col gap-4">
+                        <p className="text-white">
+                            <AnimatedText isAgent={true}>
+                                Got it! I've received the address. You can explore it by yourself on:
+                            </AnimatedText>
+                        </p>
+                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                            <ExplorerLink
+                                href={`https://tonviewer.com/${address}`}
+                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
+                            >
+                                Tonviewer
+                            </ExplorerLink>
+                        </motion.div>
+                    </div>
+                ), false, undefined, true)
+            } else {
+                const data = response.data
+                const lastActivity = new Date(data.last_activity * 1000).toLocaleString()
+                const balance = (data.balance / 1000000000).toFixed(2)
+
+                addMessage("agent", (
+                    <div className="flex flex-col gap-4">
+                        <div className="text-white space-y-2 text-sm bg-black/20 p-4 rounded-xl border border-white/10">
+                            <h3 className="font-bold text-[#0098EA] mb-2 text-base">Account details</h3>
+                            <div className="grid grid-cols-[120px_1fr] gap-x-2 gap-y-1">
+                                <span className="text-white">Raw address: <span className="font-mono text-xs break-all">{data.address}</span></span>
+
+                                <span className="text-white">Status: {data.status}</span>
+
+                                <span className="text-white">Is wallet: {data.is_wallet ? "yes" : "no"}</span>
+
+                                <span className="text-white">Interfaces: {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
+
+                                <span className="text-white">Last activity: {lastActivity}</span>
+
+                                <span className="text-white">Balance: {balance} TON</span>
+
+                                <span className="text-white">Is scam: {data.is_scam ? "yes" : "no"}</span>
+                            </div>
+                        </div>
+
+                        <p className="text-white">
+                            <AnimatedText isAgent={true}>
+                                Got it! I've received the address. You can explore it by yourself on:
+                            </AnimatedText>
+                        </p>
+                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                            <ExplorerLink
+                                href={`https://tonviewer.com/${address}`}
+                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
+                            >
+                                Tonviewer
+                            </ExplorerLink>
+                        </motion.div>
+                    </div>
+                ), false, undefined, true)
+            }
+        } catch (err) {
+            // Remove loading message
+            setMessages(prev => prev.filter(m => m.id !== loadingId))
+            // Fallback (same as error above)
+            addMessage("agent", (
+                <div className="flex flex-col gap-4">
+                    <p className="text-white">
+                        <AnimatedText isAgent={true}>
+                            Got it! I've received the address. You can explore it by yourself on:
+                        </AnimatedText>
+                    </p>
+                    <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                        <ExplorerLink
+                            href={`https://tonviewer.com/${address}`}
+                            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
+                        >
+                            Tonviewer
+                        </ExplorerLink>
+                    </motion.div>
+                </div>
+            ), false, undefined, true)
+        }
 
         // After a short delay, show scan type selection
         setTimeout(() => {
@@ -985,8 +1072,7 @@ function ChatContent() {
                 <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#29B6F6]/80 via-[#29B6F6]/40 to-transparent -z-10" />
 
 
-                <div className="max-w-2xl mx-auto w-full p-6 pb-10 md:pb-12 pointer-events-auto relative">
-
+                <div className="max-w-2xl mx-auto w-full px-6 py-4 pointer-events-auto relative">
                     <div className="relative group">
                         <div className="absolute inset-0 rounded-full" />
                         <div
@@ -1055,6 +1141,7 @@ function ChatContent() {
                         </div>
                     </div>
                 </div>
+                <span className="flex justify-center text-white/50 text-xs font-medium mb-6">Tonpixo can make mistakes. Verify important information.</span>
             </div>
         </div>
     )

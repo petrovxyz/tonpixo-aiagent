@@ -34,7 +34,7 @@ export const AnimatedText = ({ children, isAgent, isStreaming }: { children: Rea
                             visible: { opacity: 1, y: 0 }
                         }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
-                        className="inline-block"
+                        className="inline-block max-w-full break-words [overflow-wrap:anywhere]"
                     >
                         {token}
                     </motion.span>
@@ -306,7 +306,7 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
         <div
             className={cn(
                 "markdown-content",
-                "[overflow-wrap:break-word] [word-break:keep-all]",
+                "[overflow-wrap:break-word]",
                 className
             )}
         >
