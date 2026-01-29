@@ -1,5 +1,5 @@
-# Minimal requirements for worker function
+requests
+awswrangler
+pandas
 boto3
 numpy<2
-pandas
-requests

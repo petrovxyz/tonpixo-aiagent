@@ -89,6 +89,9 @@ Resources:
           JOBS_QUEUE_URL: !Ref JobsQueue
           DATA_BUCKET: !Ref DataBucket
           SECRET_NAME: !Ref AppSecrets
+          # Athena configuration
+          ATHENA_WORKGROUP: !Ref AthenaWorkGroup
+          GLUE_DATABASE: !Ref GlueDatabase
           # Langfuse configuration
           LANGFUSE_TRACING_ENVIRONMENT: !Ref "AWS::StackName"
           # Matplotlib config - use /tmp for cache (Lambda requirement)
@@ -114,6 +117,15 @@ Resources:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref AppSecrets
+        - Statement:
+            - Effect: Allow
+              Action:
+                - athena:StartQueryExecution
+                - athena:GetQueryExecution
+                - athena:GetQueryResults
+                - glue:GetTable
+                - glue:GetPartitions
+              Resource: "*"
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -139,11 +151,11 @@ Resources:
   WorkerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./worker
-      Handler: worker.lambda_handler
-      Runtime: python3.11
+      PackageType: Image
       Timeout: 300
-      MemorySize: 512
+      MemorySize: 1024
+      Architectures:
+        - arm64
       Environment:
         Variables:
           JOBS_TABLE: !Ref JobsTable
@@ -164,9 +176,171 @@ Resources:
           Properties:
             Queue: !GetAtt JobsQueue.Arn
             BatchSize: 1
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./worker
+      DockerTag: latest
 
   DataBucket:
     Type: AWS::S3::Bucket
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-workgroup"
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://${DataBucket}/athena-results/"
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: "tonpixo_db"
+
+  TransactionsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: "transactions"
+        TableType: "EXTERNAL_TABLE"
+        Parameters:
+          projection.enabled: "true"
+          projection.job_id.type: "injected"
+          classification: "parquet"
+        StorageDescriptor:
+          Location: !Sub "s3://${DataBucket}/data/transactions/"
+          InputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+          SerdeInfo:
+            SerializationLibrary: "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+          Columns:
+            - Name: "datetime"
+              Type: "timestamp"
+            - Name: "event_id"
+              Type: "string"
+            - Name: "type"
+              Type: "string"
+            - Name: "direction"
+              Type: "string"
+            - Name: "asset"
+              Type: "string"
+            - Name: "amount"
+              Type: "double"
+            - Name: "label"
+              Type: "string"
+            - Name: "category"
+              Type: "string"
+            - Name: "wallet_comment"
+              Type: "string"
+            - Name: "sender"
+              Type: "string"
+            - Name: "receiver"
+              Type: "string"
+            - Name: "comment"
+              Type: "string"
+            - Name: "status"
+              Type: "string"
+            - Name: "is_scam"
+              Type: "boolean"
+        PartitionKeys:
+          - Name: "job_id"
+            Type: "string"
+
+  JettonsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: "jettons"
+        TableType: "EXTERNAL_TABLE"
+        Parameters:
+          projection.enabled: "true"
+          projection.job_id.type: "injected"
+          classification: "parquet"
+        StorageDescriptor:
+          Location: !Sub "s3://${DataBucket}/data/jettons/"
+          InputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+          SerdeInfo:
+            SerializationLibrary: "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+          Columns:
+            - Name: "jetton_address"
+              Type: "string"
+            - Name: "symbol"
+              Type: "string"
+            - Name: "name"
+              Type: "string"
+            - Name: "balance"
+              Type: "double"
+            - Name: "balance_raw"
+              Type: "string"
+            - Name: "decimals"
+              Type: "int"
+            - Name: "price_usd"
+              Type: "double"
+            - Name: "value_usd"
+              Type: "double"
+            - Name: "verified"
+              Type: "boolean"
+            - Name: "image_url"
+              Type: "string"
+            - Name: "wallet_address"
+              Type: "string"
+        PartitionKeys:
+          - Name: "job_id"
+            Type: "string"
+
+  NftsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: "nfts"
+        TableType: "EXTERNAL_TABLE"
+        Parameters:
+          projection.enabled: "true"
+          projection.job_id.type: "injected"
+          classification: "parquet"
+        StorageDescriptor:
+          Location: !Sub "s3://${DataBucket}/data/nfts/"
+          InputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+          SerdeInfo:
+            SerializationLibrary: "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+          Columns:
+            - Name: "nft_address"
+              Type: "string"
+            - Name: "index"
+              Type: "int"
+            - Name: "name"
+              Type: "string"
+            - Name: "description"
+              Type: "string"
+            - Name: "collection_address"
+              Type: "string"
+            - Name: "collection_name"
+              Type: "string"
+            - Name: "verified"
+              Type: "boolean"
+            - Name: "image_url"
+              Type: "string"
+            - Name: "metadata_url"
+              Type: "string"
+            - Name: "owner_address"
+              Type: "string"
+            - Name: "sale_price_ton"
+              Type: "double"
+            - Name: "sale_market"
+              Type: "string"
+        PartitionKeys:
+          - Name: "job_id"
+            Type: "string"
 
 Outputs:
   ApiUrl:

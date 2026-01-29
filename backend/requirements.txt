@@ -18,3 +18,4 @@ tabulate
 botocore
 langfuse
 matplotlib
+awswrangler

@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import pandas as pd
+import awswrangler as wr
 from get_trans import fetch_history, fetch_jettons, fetch_nfts
 
 from utils import get_config_value
@@ -81,25 +82,40 @@ def lambda_handler(event, context):
                 print(f"Job {job_id} cancelled before saving results")
                 continue
             
-            file_key = f"exports/{job_id}_{scan_type}.csv"
-            csv_buffer = df.to_csv(index=False)
+            # Save to Parquet with Partitioning
+            path = f"s3://{BUCKET_NAME}/data/{scan_type}/"
             
-            s3.put_object(Bucket=BUCKET_NAME, Key=file_key, Body=csv_buffer)
+            # Ensure datetime columns are properly formatted for Parquet/Athena
+            if 'datetime' in df.columns:
+                df['datetime'] = pd.to_datetime(df['datetime'])
             
-            download_url = s3.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': file_key},
-                ExpiresIn=3600
+            # Add job_id column for partitioning key (although wr.s3.to_parquet handles it, 
+            # often good to have it in the dataframe before partition_cols extracts it 
+            # or simply to be explicit)
+            df['job_id'] = job_id
+            
+            wr.s3.to_parquet(
+                df=df,
+                path=path,
+                dataset=True,
+                mode='append',
+                partition_cols=['job_id'],
+                database=None, # We'll manage database via template or manually, creating table on the fly is also possible but we have explicit table in template
+                table=None
             )
             
             final_count = len(df)
             final_status = 'empty' if final_count == 0 else 'success'
             
+            # We no longer have a single file download URL in the same way, 
+            # but we can point to the S3 path or just say success.
+            # The agent will query via SQL.
+            
             table.update_item(
                 Key={'job_id': job_id},
-                UpdateExpression="set #s = :s, download_url = :u, #c = :c",
+                UpdateExpression="set #s = :s, #c = :c",
                 ExpressionAttributeNames={'#s': 'status', '#c': 'count'},
-                ExpressionAttributeValues={':s': final_status, ':u': download_url, ':c': final_count}
+                ExpressionAttributeValues={':s': final_status, ':c': final_count}
             )
         
         except JobCancelledException:
