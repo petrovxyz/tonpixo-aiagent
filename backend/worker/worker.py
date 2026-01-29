@@ -3,7 +3,7 @@ import os
 import boto3
 import pandas as pd
 import awswrangler as wr
-from get_trans import fetch_history, fetch_jettons, fetch_nfts
+from get_trans import fetch_transactions, fetch_jettons, fetch_nfts
 
 from utils import get_config_value
 
@@ -75,7 +75,7 @@ def lambda_handler(event, context):
             elif scan_type == 'nfts':
                 df = fetch_nfts(address, api_key=TONAPI_KEY, on_progress=on_progress)
             else:  # Default to transactions
-                df = fetch_history(address, api_key=TONAPI_KEY, on_progress=on_progress)
+                df = fetch_transactions(address, api_key=TONAPI_KEY, on_progress=on_progress)
             
             # Final cancellation check before saving
             if check_job_cancelled(job_id):

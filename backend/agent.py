@@ -114,9 +114,14 @@ def create_data_tools(job_id: str):
                      - type (string): Transaction type (e.g. TON Transfer, Token Transfer, Swap, NFT Transfer)
                      - direction (string): In, Out, Swap, Internal
                      - asset (string): Asset symbol (e.g. TON, USDT, NOT) or NFT
-                     - amount (double): Amount of asset
-                     - sender (string): Sender address/name
-                     - receiver (string): Receiver address/name
+                     - amount (double): Amount of asset (human-readable)
+                     - sender (string): Sender address (friendly format) or name
+                     - receiver (string): Receiver address (friendly format) or name
+                     - label (string): Label of the counterparty wallet (e.g. "Binance", "Fragment", "Wallet"). Use this to identify known entities.
+                     - category (string): Category of the counterparty (e.g. "CEX", "DeFi", "NFT"). Useful for grouping activity.
+                     - wallet_comment (string): Additional info about the counterparty wallet.
+                     - comment (string): Transaction comment/memo.
+                     - status (string): Transaction status (usually "Success", or error message).
                      - is_scam (boolean): Whether the event is flagged as scam
                      - job_id (string): Partition key (Use this in WHERE clause!)
 
@@ -279,7 +284,11 @@ Your core responsibilities:
 
 Table Info:
 - Table Name: `transactions`
-- Key Columns: `datetime`, `event_id`, `type`, `direction`, `asset`, `amount`, `sender`, `receiver`, `label`.
+- Key Columns: `datetime`, `type`, `direction`, `asset`, `amount`, `sender`, `receiver`, `label`, `category`, `comment`.
+- Column Descriptions:
+  - `label`: Name of the counterparty entity (e.g. "Binance", "Wallet").
+  - `category`: Type of the entity (e.g. "Exchange", "DeFi").
+  - `comment`: Message attached to the transaction.
 - Note: The `amount` column holds the value in human-readable format (e.g. 10.5 TON), not raw units.
 
 IMPORTANT SQL RULES:

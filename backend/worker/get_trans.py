@@ -2,10 +2,8 @@ import requests
 import pandas as pd
 import time
 import base64
-
 import json
 import os
-
 
 # Configuration
 LABELS_FILE = "labels/labels.json"
@@ -133,7 +131,6 @@ def extract_address_hash(address: str) -> str:
     return ""  # Could not extract
 
 
-
 def format_counterparty(address: str, name: str = None) -> str:
     """
     Format counterparty address: use name if available, otherwise convert raw to friendly.
@@ -190,424 +187,11 @@ def load_labels():
         
     return labels_map 
 
-def parse_event(event, my_address, labels_map):
+
+def fetch_transactions(account_id, api_key=None, limit_events=None, labels_map=None, on_progress=None):
     """
-    Parse a single event from the TON API /events endpoint.
-    This extracts the asset, amount, counterparty, sender, and receiver.
-    """
-    results = []
-    
-    event_id = event.get('event_id', '')
-    timestamp = event.get('timestamp', 0)
-    is_scam = event.get('is_scam', False)
-    
-    actions = event.get('actions', [])
-    
-    for action in actions:
-        action_type = action.get('type', '')
-        status = action.get('status', '')
-        
-        # Default values
-        tx_type = action_type
-        asset = "Unknown"
-        decimals = 9
-        amount = 0
-        counterparty = "Unknown"
-        direction = "Unknown"
-        comment = ""
-        
-        # New fields
-        sender_addr = "Unknown"
-        sender_name = None
-        receiver_addr = "Unknown"
-        receiver_name = None
-        
-        # TON Transfer
-        if action_type == 'TonTransfer':
-            data = action.get('TonTransfer', {})
-            
-            sender_obj = data.get('sender', {})
-            sender_addr = sender_obj.get('address', '')
-            sender_name = sender_obj.get('name')
-            
-            recipient_obj = data.get('recipient', {})
-            receiver_addr = recipient_obj.get('address', '')
-            receiver_name = recipient_obj.get('name')
-            
-            amount_raw = int(data.get('amount', 0))
-            comment = data.get('comment', '')
-            
-            asset = "TON"
-            decimals = 9
-            amount = amount_raw / (10 ** decimals)
-            
-            tx_type = "TON Transfer"
-        
-        # Jetton (Token) Transfer
-        elif action_type == 'JettonTransfer':
-            data = action.get('JettonTransfer', {})
-            
-            sender_obj = data.get('sender', {})
-            sender_addr = sender_obj.get('address', '')
-            sender_name = sender_obj.get('name')
-            
-            recipient_obj = data.get('recipient', {})
-            receiver_addr = recipient_obj.get('address', '')
-            receiver_name = recipient_obj.get('name')
-            
-            amount_raw = data.get('amount', '0')
-            comment = data.get('comment', '')
-            
-            # Get Jetton metadata
-            jetton = data.get('jetton', {})
-            asset = jetton.get('symbol', 'Unknown Token')
-            decimals = int(jetton.get('decimals', 9))
-            
-            try:
-                amount = int(amount_raw) / (10 ** decimals)
-            except (ValueError, TypeError):
-                amount = 0
-            
-            tx_type = "Token Transfer"
-        
-        # Jetton Mint
-        elif action_type == 'JettonMint':
-            data = action.get('JettonMint', {})
-            
-            recipient_obj = data.get('recipient', {})
-            receiver_addr = recipient_obj.get('address', '')
-            receiver_name = recipient_obj.get('name')
-            
-            sender_addr = "Null" # Minting usually comes from null or master
-            
-            amount_raw = data.get('amount', '0')
-            jetton = data.get('jetton', {})
-            asset = jetton.get('symbol', 'Unknown Token')
-            decimals = int(jetton.get('decimals', 9))
-            
-            try:
-                amount = int(amount_raw) / (10 ** decimals)
-            except (ValueError, TypeError):
-                amount = 0
-                
-            tx_type = "Token Mint"
-        
-        # Jetton Burn
-        elif action_type == 'JettonBurn':
-            data = action.get('JettonBurn', {})
-            
-            sender_obj = data.get('sender', {})
-            sender_addr = sender_obj.get('address', '')
-            sender_name = sender_obj.get('name')
-            
-            receiver_addr = "Null" # Burning goes to null
-            
-            amount_raw = data.get('amount', '0')
-            jetton = data.get('jetton', {})
-            asset = jetton.get('symbol', 'Unknown Token')
-            decimals = int(jetton.get('decimals', 9))
-            
-            try:
-                amount = int(amount_raw) / (10 ** decimals)
-            except (ValueError, TypeError):
-                amount = 0
-                
-            tx_type = "Token Burn"
-        
-        # NFT Transfer
-        elif action_type == 'NftItemTransfer':
-            data = action.get('NftItemTransfer', {})
-            
-            sender_obj = data.get('sender', {})
-            sender_addr = sender_obj.get('address', '') if sender_obj else ''
-            sender_name = sender_obj.get('name') if sender_obj else None
-            
-            recipient_obj = data.get('recipient', {})
-            receiver_addr = recipient_obj.get('address', '') if recipient_obj else ''
-            receiver_name = recipient_obj.get('name') if recipient_obj else None
-            
-            asset = "NFT"
-            amount = 1
-            
-            tx_type = "NFT Transfer"
-        
-        # Contract Deploy
-        elif action_type == 'ContractDeploy':
-            data = action.get('ContractDeploy', {})
-            receiver_addr = data.get('address', 'Unknown')
-            sender_addr = action.get('sender', {}).get('address', my_address) # Fallback to my_address implies self-action if not specified
-            
-            asset = "Contract"
-            amount = 0
-            tx_type = "Contract Deploy"
-        
-        # Swap
-        elif action_type == 'JettonSwap':
-            data = action.get('JettonSwap', {})
-            
-            # For Swap, Sender is Me
-            sender_addr = my_address
-            
-            # Counterparty logic update (Dex)
-            receiver_addr = data.get('router', {}).get('address', '') 
-            if not receiver_addr:
-                 receiver_name = data.get('dex', 'DEX')
-                 receiver_addr = receiver_name 
-            
-            # Determine SENT (Input / User Gave)
-            sent_asset = "Unknown"
-            sent_amount = 0
-            
-            jetton_in = data.get('jetton_master_in')
-            ton_in = data.get('ton_in')
-            amount_in_raw = data.get('amount_in', '0')
-            
-            if jetton_in:
-                sent_asset = jetton_in.get('symbol', 'Token')
-                d = int(jetton_in.get('decimals', 9))
-                try:
-                    sent_amount = int(amount_in_raw) / (10 ** d)
-                except:
-                    sent_amount = 0
-            elif ton_in:
-                sent_asset = "TON"
-                try:
-                    sent_amount = int(ton_in) / (10 ** 9)
-                except:
-                    sent_amount = 0
-            
-            # Determine RECEIVED (Output / User Got)
-            received_asset = "Unknown"
-            received_amount = 0
-            
-            jetton_out = data.get('jetton_master_out')
-            ton_out = data.get('ton_out')
-            amount_out_raw = data.get('amount_out', '0')
-            
-            if jetton_out:
-                received_asset = jetton_out.get('symbol', 'Token')
-                d = int(jetton_out.get('decimals', 9))
-                try:
-                    received_amount = int(amount_out_raw) / (10 ** d)
-                except:
-                    received_amount = 0
-            elif ton_out:
-                received_asset = "TON"
-                try:
-                    received_amount = int(ton_out) / (10 ** 9)
-                except:
-                    received_amount = 0
-            
-            asset = f"{sent_asset} → {received_asset}"
-            amount = received_amount # Show what we got
-            direction = "Swap"
-            tx_type = "Swap"
-        
-        # Subscribe
-        elif action_type == 'Subscribe':
-            data = action.get('Subscribe', {})
-            receiver_obj = data.get('beneficiary', {})
-            receiver_addr = receiver_obj.get('address', 'Unknown')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "Subscription"
-            amount = int(data.get('amount', 0)) / (10 ** 9)
-            tx_type = "Subscribe"
-        
-        elif action_type == 'UnSubscribe':
-            data = action.get('UnSubscribe', {})
-            receiver_obj = data.get('beneficiary', {})
-            receiver_addr = receiver_obj.get('address', 'Unknown')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "Subscription"
-            amount = 0
-            tx_type = "Unsubscribe"
-        
-        # Staking
-        elif action_type == 'DepositStake':
-            data = action.get('DepositStake', {})
-            receiver_obj = data.get('pool', {})
-            receiver_addr = receiver_obj.get('address', 'Staking Pool')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "TON"
-            amount = int(data.get('amount', 0)) / (10 ** 9)
-            tx_type = "Stake Deposit"
-        
-        elif action_type == 'WithdrawStake':
-            data = action.get('WithdrawStake', {})
-            sender_obj = data.get('pool', {})
-            sender_addr = sender_obj.get('address', 'Staking Pool')
-            sender_name = sender_obj.get('name')
-            
-            receiver_addr = my_address
-            
-            asset = "TON"
-            amount = int(data.get('amount', 0)) / (10 ** 9)
-            tx_type = "Stake Withdraw"
-        
-        elif action_type == 'WithdrawStakeRequest':
-            data = action.get('WithdrawStakeRequest', {})
-            receiver_obj = data.get('pool', {})
-            receiver_addr = receiver_obj.get('address', 'Staking Pool')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "TON"
-            amount = int(data.get('amount', 0)) / (10 ** 9)
-            tx_type = "Stake Withdraw Request"
-        
-        # Auction Bid
-        elif action_type == 'AuctionBid':
-            data = action.get('AuctionBid', {})
-            receiver_obj = data.get('auction', {})
-            receiver_addr = receiver_obj.get('address', 'Auction')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "TON"
-            amount_data = data.get('amount', {})
-            amount = int(amount_data.get('value', 0)) / (10 ** 9)
-            tx_type = "Auction Bid"
-        
-        # Smart Contract Exec
-        elif action_type == 'SmartContractExec':
-            data = action.get('SmartContractExec', {})
-            receiver_obj = data.get('contract', {})
-            receiver_addr = receiver_obj.get('address', 'Contract')
-            receiver_name = receiver_obj.get('name')
-            
-            sender_addr = my_address
-            
-            asset = "TON"
-            amount = int(data.get('ton_attached', 0)) / (10 ** 9)
-            tx_type = "Contract Execution"
-        
-        # Domain Renew
-        elif action_type == 'DomainRenew':
-            data = action.get('DomainRenew', {})
-            receiver_addr = data.get('domain', 'Unknown Domain')
-            sender_addr = my_address
-            
-            asset = "Domain"
-            amount = 0
-            tx_type = "Domain Renew"
-        
-        else:
-            # Unknown
-            preview = action.get('simple_preview', {})
-            if preview:
-                tx_type = preview.get('name', action_type)
-                asset = preview.get('value', 'Unknown')
-                
-                # Check for addresses in preview if possible, but hard.
-                # Just default to unknown for now.
-                
-                # Try parsing value
-                value_str = preview.get('value', '')
-                if value_str:
-                    parts = value_str.split()
-                    if len(parts) >= 2:
-                        try:
-                            amount = float(parts[0])
-                            asset = parts[1]
-                        except ValueError:
-                            pass
-            else:
-                tx_type = action_type
-
-        # Logic to determine direction based on extracted sender/receiver
-        
-        my_hash = extract_address_hash(my_address)
-        sender_hash = extract_address_hash(sender_addr)
-        receiver_hash = extract_address_hash(receiver_addr)
-        
-        if action_type == 'JettonSwap':
-            direction = "Swap"
-            target_address = receiver_addr # Router
-        elif receiver_hash and receiver_hash == my_hash:
-            direction = "In"
-            target_address = sender_addr
-        elif sender_hash and sender_hash == my_hash:
-            direction = "Out"
-            target_address = receiver_addr
-        else:
-            # Fallback for special types or failure to match
-            target_address = None
-            if direction == "Unknown":
-                # Some types imply direction
-                if action_type in ['Subscribe', 'AuctionBid', 'SmartContractExec', 'DomainRenew', 'ContractDeploy']:
-                    direction = "Out"
-                    target_address = receiver_addr
-                elif action_type in ['JettonMint']:
-                    direction = "In"
-                    target_address = sender_addr # Null
-                elif action_type in ['JettonBurn']:
-                    direction = "Out"
-                    target_address = receiver_addr # Null
-                else:
-                    direction = "Internal"
-                    # Try to guess target
-                    if receiver_addr and receiver_addr != my_address:
-                        target_address = receiver_addr
-                    elif sender_addr and sender_addr != my_address:
-                        target_address = sender_addr
-
-        # Labels lookup
-        label = "Unknown"
-        category = "Unknown"
-        wallet_comment = "Unknown"
-        
-        target_hash = extract_address_hash(target_address)
-        if target_hash and labels_map:
-            info = labels_map.get(target_hash)
-            if info:
-                label = info.get('label') or "Unknown"
-                category = info.get('category') or "Unknown"
-                wallet_comment = info.get('comment') or "Unknown"
-
-        # Ensure comment is not empty
-        final_comment = comment if comment else "Unknown"
-
-        # Format everything
-        sender_formatted = format_counterparty(sender_addr, sender_name)
-        receiver_formatted = format_counterparty(receiver_addr, receiver_name)
-
-        result = {
-            'datetime': pd.to_datetime(timestamp, unit='s'),
-            'event_id': event_id,
-            'type': tx_type,
-            'direction': direction,
-            'asset': asset,
-            'amount': amount,
-            'label': label,
-            'category': category,
-            'wallet_comment': wallet_comment,
-            'sender': sender_formatted,
-            'receiver': receiver_formatted,
-            'comment': final_comment,
-            'status': 'Success' if status == 'ok' else status,
-            'is_scam': is_scam
-        }
-        
-        results.append(result)
-    
-    return results
-
-
-def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, on_progress=None):
-    """
-    Fetch transaction history using the /events endpoint.
-    This provides properly parsed actions with real values.
+    Fetch and parse transaction history for a TON account.
+    Uses the /events endpoint and parses actions into a structured DataFrame.
     """
     base_url = f"https://tonapi.io/v2/accounts/{account_id}/events"
     headers = {"Content-Type": "application/json"}
@@ -643,9 +227,409 @@ def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, 
             if not events:
                 break
             
+            # Process each event
             for event in events:
-                parsed_actions = parse_event(event, account_id, labels_map)
-                all_data.extend(parsed_actions)
+                # --- Parsing Logic Start ---
+                event_id = event.get('event_id', '')
+                timestamp = event.get('timestamp', 0)
+                is_scam = event.get('is_scam', False)
+                
+                actions = event.get('actions', [])
+                
+                for action in actions:
+                    action_type = action.get('type', '')
+                    status = action.get('status', '')
+                    
+                    # Default values
+                    tx_type = action_type
+                    asset = "Unknown"
+                    decimals = 9
+                    amount = 0
+                    direction = "Unknown"
+                    comment = ""
+                    
+                    # New fields
+                    sender_addr = "Unknown"
+                    sender_name = None
+                    receiver_addr = "Unknown"
+                    receiver_name = None
+                    
+                    # TON Transfer
+                    if action_type == 'TonTransfer':
+                        data_transfer = action.get('TonTransfer', {})
+                        
+                        sender_obj = data_transfer.get('sender', {})
+                        sender_addr = sender_obj.get('address', '')
+                        sender_name = sender_obj.get('name')
+                        
+                        recipient_obj = data_transfer.get('recipient', {})
+                        receiver_addr = recipient_obj.get('address', '')
+                        receiver_name = recipient_obj.get('name')
+                        
+                        amount_raw = int(data_transfer.get('amount', 0))
+                        comment = data_transfer.get('comment', '')
+                        
+                        asset = "TON"
+                        decimals = 9
+                        amount = amount_raw / (10 ** decimals)
+                        
+                        tx_type = "TON Transfer"
+                    
+                    # Jetton (Token) Transfer
+                    elif action_type == 'JettonTransfer':
+                        data_transfer = action.get('JettonTransfer', {})
+                        
+                        sender_obj = data_transfer.get('sender', {})
+                        sender_addr = sender_obj.get('address', '')
+                        sender_name = sender_obj.get('name')
+                        
+                        recipient_obj = data_transfer.get('recipient', {})
+                        receiver_addr = recipient_obj.get('address', '')
+                        receiver_name = recipient_obj.get('name')
+                        
+                        amount_raw = data_transfer.get('amount', '0')
+                        comment = data_transfer.get('comment', '')
+                        
+                        # Get Jetton metadata
+                        jetton = data_transfer.get('jetton', {})
+                        asset = jetton.get('symbol', 'Unknown Token')
+                        decimals = int(jetton.get('decimals', 9))
+                        
+                        try:
+                            amount = int(amount_raw) / (10 ** decimals)
+                        except (ValueError, TypeError):
+                            amount = 0
+                        
+                        tx_type = "Token Transfer"
+                    
+                    # Jetton Mint
+                    elif action_type == 'JettonMint':
+                        data_transfer = action.get('JettonMint', {})
+                        
+                        recipient_obj = data_transfer.get('recipient', {})
+                        receiver_addr = recipient_obj.get('address', '')
+                        receiver_name = recipient_obj.get('name')
+                        
+                        sender_addr = "Null" # Minting usually comes from null or master
+                        
+                        amount_raw = data_transfer.get('amount', '0')
+                        jetton = data_transfer.get('jetton', {})
+                        asset = jetton.get('symbol', 'Unknown Token')
+                        decimals = int(jetton.get('decimals', 9))
+                        
+                        try:
+                            amount = int(amount_raw) / (10 ** decimals)
+                        except (ValueError, TypeError):
+                            amount = 0
+                            
+                        tx_type = "Token Mint"
+                    
+                    # Jetton Burn
+                    elif action_type == 'JettonBurn':
+                        data_transfer = action.get('JettonBurn', {})
+                        
+                        sender_obj = data_transfer.get('sender', {})
+                        sender_addr = sender_obj.get('address', '')
+                        sender_name = sender_obj.get('name')
+                        
+                        receiver_addr = "Null" # Burning goes to null
+                        
+                        amount_raw = data_transfer.get('amount', '0')
+                        jetton = data_transfer.get('jetton', {})
+                        asset = jetton.get('symbol', 'Unknown Token')
+                        decimals = int(jetton.get('decimals', 9))
+                        
+                        try:
+                            amount = int(amount_raw) / (10 ** decimals)
+                        except (ValueError, TypeError):
+                            amount = 0
+                            
+                        tx_type = "Token Burn"
+                    
+                    # NFT Transfer
+                    elif action_type == 'NftItemTransfer':
+                        data_transfer = action.get('NftItemTransfer', {})
+                        
+                        sender_obj = data_transfer.get('sender', {})
+                        sender_addr = sender_obj.get('address', '') if sender_obj else ''
+                        sender_name = sender_obj.get('name') if sender_obj else None
+                        
+                        recipient_obj = data_transfer.get('recipient', {})
+                        receiver_addr = recipient_obj.get('address', '') if recipient_obj else ''
+                        receiver_name = recipient_obj.get('name') if recipient_obj else None
+                        
+                        asset = "NFT"
+                        amount = 1
+                        
+                        tx_type = "NFT Transfer"
+                    
+                    # Contract Deploy
+                    elif action_type == 'ContractDeploy':
+                        data_transfer = action.get('ContractDeploy', {})
+                        receiver_addr = data_transfer.get('address', 'Unknown')
+                        sender_addr = action.get('sender', {}).get('address', account_id) # Fallback to account_id implies self-action
+                        
+                        asset = "Contract"
+                        amount = 0
+                        tx_type = "Contract Deploy"
+                    
+                    # Swap
+                    elif action_type == 'JettonSwap':
+                        data_transfer = action.get('JettonSwap', {})
+                        
+                        # For Swap, Sender is Me
+                        sender_addr = account_id
+                        
+                        # Counterparty logic update (Dex)
+                        receiver_addr = data_transfer.get('router', {}).get('address', '') 
+                        if not receiver_addr:
+                             receiver_name = data_transfer.get('dex', 'DEX')
+                             receiver_addr = receiver_name 
+                        
+                        # Determine SENT (Input / User Gave)
+                        sent_asset = "Unknown"
+                        sent_amount = 0
+                        
+                        jetton_in = data_transfer.get('jetton_master_in')
+                        ton_in = data_transfer.get('ton_in')
+                        amount_in_raw = data_transfer.get('amount_in', '0')
+                        
+                        if jetton_in:
+                            sent_asset = jetton_in.get('symbol', 'Token')
+                            d = int(jetton_in.get('decimals', 9))
+                            try:
+                                sent_amount = int(amount_in_raw) / (10 ** d)
+                            except:
+                                sent_amount = 0
+                        elif ton_in:
+                            sent_asset = "TON"
+                            try:
+                                sent_amount = int(ton_in) / (10 ** 9)
+                            except:
+                                sent_amount = 0
+                        
+                        # Determine RECEIVED (Output / User Got)
+                        received_asset = "Unknown"
+                        received_amount = 0
+                        
+                        jetton_out = data_transfer.get('jetton_master_out')
+                        ton_out = data_transfer.get('ton_out')
+                        amount_out_raw = data_transfer.get('amount_out', '0')
+                        
+                        if jetton_out:
+                            received_asset = jetton_out.get('symbol', 'Token')
+                            d = int(jetton_out.get('decimals', 9))
+                            try:
+                                received_amount = int(amount_out_raw) / (10 ** d)
+                            except:
+                                received_amount = 0
+                        elif ton_out:
+                            received_asset = "TON"
+                            try:
+                                received_amount = int(ton_out) / (10 ** 9)
+                            except:
+                                received_amount = 0
+                        
+                        asset = f"{sent_asset} → {received_asset}"
+                        amount = received_amount # Show what we got
+                        direction = "Swap"
+                        tx_type = "Swap"
+                    
+                    # Subscribe
+                    elif action_type == 'Subscribe':
+                        data_transfer = action.get('Subscribe', {})
+                        receiver_obj = data_transfer.get('beneficiary', {})
+                        receiver_addr = receiver_obj.get('address', 'Unknown')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "Subscription"
+                        amount = int(data_transfer.get('amount', 0)) / (10 ** 9)
+                        tx_type = "Subscribe"
+                    
+                    elif action_type == 'UnSubscribe':
+                        data_transfer = action.get('UnSubscribe', {})
+                        receiver_obj = data_transfer.get('beneficiary', {})
+                        receiver_addr = receiver_obj.get('address', 'Unknown')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "Subscription"
+                        amount = 0
+                        tx_type = "Unsubscribe"
+                    
+                    # Staking
+                    elif action_type == 'DepositStake':
+                        data_transfer = action.get('DepositStake', {})
+                        receiver_obj = data_transfer.get('pool', {})
+                        receiver_addr = receiver_obj.get('address', 'Staking Pool')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "TON"
+                        amount = int(data_transfer.get('amount', 0)) / (10 ** 9)
+                        tx_type = "Stake Deposit"
+                    
+                    elif action_type == 'WithdrawStake':
+                        data_transfer = action.get('WithdrawStake', {})
+                        sender_obj = data_transfer.get('pool', {})
+                        sender_addr = sender_obj.get('address', 'Staking Pool')
+                        sender_name = sender_obj.get('name')
+                        
+                        receiver_addr = account_id
+                        
+                        asset = "TON"
+                        amount = int(data_transfer.get('amount', 0)) / (10 ** 9)
+                        tx_type = "Stake Withdraw"
+                    
+                    elif action_type == 'WithdrawStakeRequest':
+                        data_transfer = action.get('WithdrawStakeRequest', {})
+                        receiver_obj = data_transfer.get('pool', {})
+                        receiver_addr = receiver_obj.get('address', 'Staking Pool')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "TON"
+                        amount = int(data_transfer.get('amount', 0)) / (10 ** 9)
+                        tx_type = "Stake Withdraw Request"
+                    
+                    # Auction Bid
+                    elif action_type == 'AuctionBid':
+                        data_transfer = action.get('AuctionBid', {})
+                        receiver_obj = data_transfer.get('auction', {})
+                        receiver_addr = receiver_obj.get('address', 'Auction')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "TON"
+                        amount_data = data_transfer.get('amount', {})
+                        amount = int(amount_data.get('value', 0)) / (10 ** 9)
+                        tx_type = "Auction Bid"
+                    
+                    # Smart Contract Exec
+                    elif action_type == 'SmartContractExec':
+                        data_transfer = action.get('SmartContractExec', {})
+                        receiver_obj = data_transfer.get('contract', {})
+                        receiver_addr = receiver_obj.get('address', 'Contract')
+                        receiver_name = receiver_obj.get('name')
+                        
+                        sender_addr = account_id
+                        
+                        asset = "TON"
+                        amount = int(data_transfer.get('ton_attached', 0)) / (10 ** 9)
+                        tx_type = "Contract Execution"
+                    
+                    # Domain Renew
+                    elif action_type == 'DomainRenew':
+                        data_transfer = action.get('DomainRenew', {})
+                        receiver_addr = data_transfer.get('domain', 'Unknown Domain')
+                        sender_addr = account_id
+                        
+                        asset = "Domain"
+                        amount = 0
+                        tx_type = "Domain Renew"
+                    
+                    else:
+                        # Unknown
+                        preview = action.get('simple_preview', {})
+                        if preview:
+                            tx_type = preview.get('name', action_type)
+                            asset = preview.get('value', 'Unknown')
+                            
+                            # Try parsing value
+                            value_str = preview.get('value', '')
+                            if value_str:
+                                parts = value_str.split()
+                                if len(parts) >= 2:
+                                    try:
+                                        amount = float(parts[0])
+                                        asset = parts[1]
+                                    except ValueError:
+                                        pass
+                        else:
+                            tx_type = action_type
+            
+                    # Logic to determine direction based on extracted sender/receiver
+                    
+                    my_hash = extract_address_hash(account_id)
+                    sender_hash = extract_address_hash(sender_addr)
+                    receiver_hash = extract_address_hash(receiver_addr)
+                    
+                    if action_type == 'JettonSwap':
+                        direction = "Swap"
+                        target_address = receiver_addr # Router
+                    elif receiver_hash and receiver_hash == my_hash:
+                        direction = "In"
+                        target_address = sender_addr
+                    elif sender_hash and sender_hash == my_hash:
+                        direction = "Out"
+                        target_address = receiver_addr
+                    else:
+                        # Fallback for special types or failure to match
+                        target_address = None
+                        if direction == "Unknown":
+                            # Some types imply direction
+                            if action_type in ['Subscribe', 'AuctionBid', 'SmartContractExec', 'DomainRenew', 'ContractDeploy']:
+                                direction = "Out"
+                                target_address = receiver_addr
+                            elif action_type in ['JettonMint']:
+                                direction = "In"
+                                target_address = sender_addr # Null
+                            elif action_type in ['JettonBurn']:
+                                direction = "Out"
+                                target_address = receiver_addr # Null
+                            else:
+                                direction = "Internal"
+                                # Try to guess target
+                                if receiver_addr and receiver_addr != account_id:
+                                    target_address = receiver_addr
+                                elif sender_addr and sender_addr != account_id:
+                                    target_address = sender_addr
+            
+                    # Labels lookup
+                    label = "Unknown"
+                    category = "Unknown"
+                    wallet_comment = "Unknown"
+                    
+                    target_hash = extract_address_hash(target_address)
+                    if target_hash and labels_map:
+                        info = labels_map.get(target_hash)
+                        if info:
+                            label = info.get('label') or "Unknown"
+                            category = info.get('category') or "Unknown"
+                            wallet_comment = info.get('comment') or "Unknown"
+            
+                    # Ensure comment is not empty
+                    final_comment = comment if comment else "Unknown"
+            
+                    # Format everything
+                    sender_formatted = format_counterparty(sender_addr, sender_name)
+                    receiver_formatted = format_counterparty(receiver_addr, receiver_name)
+            
+                    result = {
+                        'datetime': pd.to_datetime(timestamp, unit='s'),
+                        'event_id': event_id,
+                        'type': tx_type,
+                        'direction': direction,
+                        'asset': asset,
+                        'amount': amount,
+                        'label': label,
+                        'category': category,
+                        'wallet_comment': wallet_comment,
+                        'sender': sender_formatted,
+                        'receiver': receiver_formatted,
+                        'comment': final_comment,
+                        'status': 'Success' if status == 'ok' else status,
+                        'is_scam': is_scam
+                    }
+                    
+                    all_data.append(result)
+                # --- Parsing Logic End ---
             
             print(f"   Fetched batch of {len(events)} events. Total actions so far: {len(all_data)}")
             
@@ -801,18 +785,16 @@ def fetch_nfts(account_id, api_key=None, on_progress=None):
         headers["Authorization"] = f"Bearer {api_key}"
     
     all_data = []
+    print(f"Fetching NFTs for {account_id}...")
     offset = 0
     limit = 100
-    
-    print(f"Fetching NFTs for {account_id}...")
     
     while True:
         params = {
             "limit": limit,
-            "offset": offset,
-            "indirect_ownership": "false"  # Only directly owned NFTs
+            "offset": offset
         }
-        
+    
         try:
             resp = requests.get(base_url, headers=headers, params=params)
             
@@ -820,57 +802,46 @@ def fetch_nfts(account_id, api_key=None, on_progress=None):
                 print("   Rate limit hit. Pausing...")
                 time.sleep(2)
                 continue
-            
+                
             resp.raise_for_status()
             data = resp.json()
             nft_items = data.get('nft_items', [])
             
             if not nft_items:
                 break
-            
+                
             for item in nft_items:
+                meta = item.get('metadata', {})
                 collection = item.get('collection', {})
-                metadata = item.get('metadata', {})
-                previews = item.get('previews', [])
                 sale = item.get('sale', {})
                 
-                # Get best preview image
-                image_url = ''
-                for preview in previews:
-                    if preview.get('resolution') == '500x500':
-                        image_url = preview.get('url', '')
-                        break
-                if not image_url and previews:
-                    image_url = previews[0].get('url', '')
-                
-                # Parse sale info
+                # Check for sale price
                 sale_price_ton = 0
-                sale_market = ''
+                sale_market = "None"
                 if sale:
-                    price_info = sale.get('price', {})
-                    if price_info:
-                        try:
-                            sale_price_ton = int(price_info.get('value', 0)) / (10 ** 9)
-                        except:
-                            pass
-                    sale_market = sale.get('market', {}).get('name', '')
+                    price_raw = sale.get('price', {}).get('value', '0')
+                    try:
+                        sale_price_ton = int(price_raw) / (10 ** 9)
+                        sale_market = sale.get('market', {}).get('name', 'Unknown')
+                    except:
+                        pass
                 
                 record = {
                     'nft_address': item.get('address', ''),
-                    'index': item.get('index', 0),
-                    'name': metadata.get('name', item.get('dns', 'Unknown NFT')),
-                    'description': metadata.get('description', '')[:500] if metadata.get('description') else '',
+                    'index': item.get('index', -1),
+                    'name': meta.get('name', 'Unknown NFT'),
+                    'description': meta.get('description', ''),
                     'collection_address': collection.get('address', ''),
                     'collection_name': collection.get('name', 'Unknown Collection'),
-                    'verified': item.get('verified', False) or collection.get('verified', False),
-                    'image_url': image_url or metadata.get('image', ''),
-                    'metadata_url': item.get('metadata', {}).get('url', '') if isinstance(item.get('metadata'), dict) else '',
+                    'verified': item.get('approved_by') is not None, # Crude check, approved_by is list
+                    'image_url': item.get('previews', [{}])[-1].get('url', ''),
+                    'metadata_url': item.get('metadata_url', ''),
                     'owner_address': item.get('owner', {}).get('address', ''),
                     'sale_price_ton': sale_price_ton,
                     'sale_market': sale_market
                 }
                 all_data.append(record)
-            
+                
             print(f"   Fetched batch of {len(nft_items)} NFTs. Total: {len(all_data)}")
             
             if on_progress:
@@ -878,12 +849,12 @@ def fetch_nfts(account_id, api_key=None, on_progress=None):
             
             if len(nft_items) < limit:
                 break
-            
+                
             offset += limit
-            time.sleep(0.2)  # Rate limit protection
+            time.sleep(0.2)
             
         except requests.exceptions.RequestException as e:
             print(f"Error fetching NFTs: {e}")
             break
-    
+            
     return pd.DataFrame(all_data)

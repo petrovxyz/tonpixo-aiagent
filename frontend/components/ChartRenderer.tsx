@@ -188,7 +188,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                         e.preventDefault();
                         setIsOpen(true);
                     }}
-                    className="w-full py-2.5 bg-[#0098EA] hover:bg-[#0087d1] active:scale-[0.98] transition-all rounded-xl text-white font-medium text-sm flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-[#0098EA] hover:bg-[#0087d1] active:scale-[0.98] transition-all rounded-xl text-white font-medium text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                     <FontAwesomeIcon icon={faExpand} />
                     <span>Open</span>
