@@ -541,14 +541,37 @@ function ChatContent() {
 
                 if (userRef.current) {
                     try {
+                        const scanLabels: Record<string, string> = {
+                            'transactions': 'Transactions',
+                            'jettons': 'Jettons',
+                            'nfts': 'NFTs'
+                        }
+                        const userMessage = `Scan ${scanLabels[scanType] || scanType}`
+                        // Construct markdown for agent message
+                        const agentMarkdown = `### Analysis complete\n\nI'm done! ${data.count} ${getScanTypeLabel(scanType)} have been scanned and I'm ready for your questions.`
+
+                        // 1. Ensure chat exists
                         await axios.post(`${apiUrl}/api/chat/init`, {
                             chat_id: currentChatId,
                             user_id: userRef.current.id,
                             job_id: jobId,
                             title: `Analysis: ${scanType}`
                         })
+
+                        // 2. Save User Message
+                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                            role: "user",
+                            content: userMessage
+                        })
+
+                        // 3. Save Agent Message
+                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                            role: "agent",
+                            content: agentMarkdown
+                        })
+
                     } catch (e) {
-                        console.error("Failed to init chat:", e)
+                        console.error("Failed to init chat/save messages:", e)
                     }
                 }
 

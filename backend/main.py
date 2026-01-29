@@ -445,6 +445,24 @@ async def init_chat(request: InitChatRequest):
         print(f"[CHAT] Error initializing chat: {e}")
         return {"status": "error", "message": str(e)}
 
+class SaveMessageRequest(BaseModel):
+    role: str
+    content: str
+    trace_id: str | None = None
+
+@app.post("/api/chat/{chat_id}/message")
+async def manual_save_message(chat_id: str, request: SaveMessageRequest):
+    """
+    Manually save a message to a chat (used for system-generated messages like scan status).
+    """
+    print(f"[CHAT] Manually saving message to {chat_id}: {request.role}")
+    try:
+        msg_id = save_message(chat_id, request.role, request.content, request.trace_id)
+        return {"status": "ok", "message_id": msg_id}
+    except Exception as e:
+        print(f"[CHAT] Error saving message: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/score")
 async def score_trace(request: ScoreRequest):
     """
