@@ -2,6 +2,8 @@ import boto3
 import os
 from dotenv import load_dotenv
 
+from utils import get_config_value
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -129,8 +131,8 @@ async def login(request: LoginRequest):
     print(f"[LOGIN] initData length: {len(request.initData)}")
     
     try:
-        # Get bot token from environment
-        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+        # Get bot token from environment or secrets
+        bot_token = get_config_value('TELEGRAM_BOT_TOKEN')
         
         # Skip validation in development mode if no bot token
         skip_validation = False

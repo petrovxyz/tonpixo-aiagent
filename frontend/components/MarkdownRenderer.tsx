@@ -108,7 +108,7 @@ function ChartImage({ src }: { src: string }) {
                     />
                     {/* Always visible expand indicator */}
                     {!isLoading && (
-                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-full flex items-center gap-1.5 text-white/90 text-xs font-medium">
+                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/90 rounded-full flex items-center gap-1.5 text-white text-xs font-medium">
                             <FontAwesomeIcon icon={faExpand} className="text-[10px]" />
                             <span>Tap to expand</span>
                         </div>
@@ -122,8 +122,8 @@ function ChartImage({ src }: { src: string }) {
                     className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
                     onClick={() => setIsExpanded(false)}
                 >
-                    {/* Close button - large touch target for mobile */}
-                    <div className="flex justify-end p-4">
+                    {/* Close button */}
+                    <div className="flex justify-end p-4 pt-20">
                         <button
                             onClick={() => setIsExpanded(false)}
                             className="w-12 h-12 bg-white/10 active:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
@@ -142,11 +142,6 @@ function ChartImage({ src }: { src: string }) {
                             onClick={(e) => e.stopPropagation()}
                             unoptimized
                         />
-                    </div>
-
-                    {/* Tap anywhere hint */}
-                    <div className="p-4 text-center text-white/50 text-sm">
-                        Tap anywhere to close
                     </div>
                 </div>,
                 document.body

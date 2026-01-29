@@ -4,12 +4,14 @@ import boto3
 import pandas as pd
 from get_trans import fetch_history, fetch_jettons, fetch_nfts
 
+from utils import get_config_value
+
 dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
 
 TABLE_NAME = os.environ.get('JOBS_TABLE')
 BUCKET_NAME = os.environ.get('DATA_BUCKET')
-TONAPI_KEY = os.environ.get('TONAPI_KEY')
+TONAPI_KEY = get_config_value('TONAPI_KEY')
 table = dynamodb.Table(TABLE_NAME)
 
 # Exception to signal job cancellation

@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langfuse import get_client
+from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 
 if TYPE_CHECKING:
@@ -33,9 +33,15 @@ BEDROCK_RETRY_CONFIG = Config(
 s3 = boto3.client('s3')
 bedrock_runtime = boto3.client('bedrock-runtime', config=BEDROCK_RETRY_CONFIG)
 
+from utils import get_config_value
+
 # Initialize Langfuse client (uses environment variables)
 # LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_HOST
-langfuse = get_client()
+langfuse = Langfuse(
+    public_key=get_config_value("LANGFUSE_PUBLIC_KEY"),
+    secret_key=get_config_value("LANGFUSE_SECRET_KEY"),
+    host=get_config_value("LANGFUSE_HOST", "https://cloud.langfuse.com")
+)
 
 # Global dataframe cache for the current session
 _dataframe_cache: dict[str, Any] = {}

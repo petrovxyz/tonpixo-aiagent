@@ -35,6 +35,12 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Secrets for Tonpixo"
+      SecretString: !Sub '{"TONAPI_KEY":"${TonApiKey}","TELEGRAM_BOT_TOKEN":"${TelegramBotToken}","LANGFUSE_SECRET_KEY":"${LangfuseSecretKey}","LANGFUSE_PUBLIC_KEY":"${LangfusePublicKey}","LANGFUSE_HOST":"${LangfuseHost}"}'
+
   JobsQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -81,12 +87,9 @@ Resources:
           JOBS_TABLE: !Ref JobsTable
           USERS_TABLE: !Ref UsersTable
           JOBS_QUEUE_URL: !Ref JobsQueue
-          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           DATA_BUCKET: !Ref DataBucket
+          SECRET_NAME: !Ref AppSecrets
           # Langfuse configuration
-          LANGFUSE_SECRET_KEY: !Ref LangfuseSecretKey
-          LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
-          LANGFUSE_HOST: !Ref LangfuseHost
           LANGFUSE_TRACING_ENVIRONMENT: !Ref "AWS::StackName"
           # Matplotlib config - use /tmp for cache (Lambda requirement)
           MPLCONFIGDIR: /tmp/matplotlib
@@ -107,6 +110,10 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref AppSecrets
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -141,12 +148,16 @@ Resources:
         Variables:
           JOBS_TABLE: !Ref JobsTable
           DATA_BUCKET: !Ref DataBucket
-          TONAPI_KEY: !Ref TonApiKey
+          SECRET_NAME: !Ref AppSecrets
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
         - S3WritePolicy:
             BucketName: !Ref DataBucket
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref AppSecrets
       Events:
         SQSEvent:
           Type: SQS
