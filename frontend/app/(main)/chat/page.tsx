@@ -562,20 +562,18 @@ function ChatContent() {
                 addMessage("agent", (
                     <div className="flex flex-col gap-4">
                         <div className="text-white space-y-2 text-sm bg-black/10 p-4 rounded-xl">
-                            <h3 className="font-bold text-white mb-2 text-base">Account details</h3>
+                            <h3 className="font-bold text-white mb-2 text-base">Address details</h3>
                             <span className="text-white"><span className="font-semibold">Raw address:</span> <span className="font-mono text-xs break-all">{data.address}</span></span>
+                            <div className="flex flex-col gap-2">
+                                <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
+                                <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.is_wallet ? "yes" : "no"}</span>
+                                <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
+                                <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity}</span>
 
-                            <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
+                                <span className="text-white"><span className="font-semibold">Balance:</span> {balance} TON</span>
 
-                            <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.is_wallet ? "yes" : "no"}</span>
-
-                            <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
-
-                            <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity}</span>
-
-                            <span className="text-white"><span className="font-semibold">Balance:</span> {balance} TON</span>
-
-                            <span className="text-white"><span className="font-semibold">Is scam:</span> {data.is_scam ? "yes" : "no"}</span>
+                                <span className="text-white"><span className="font-semibold">Is scam:</span> {data.is_scam ? "yes" : "no"}</span>
+                            </div>
                         </div>
 
                         <p className="text-white">
