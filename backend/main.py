@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
+from db import save_chat, save_message, get_user_chats, get_chat_messages, get_chat
 
 app = FastAPI()
 
@@ -45,6 +46,8 @@ class LoginRequest(BaseModel):
 class ChatRequest(BaseModel):
     job_id: str
     question: str
+    chat_id: str | None = None
+    user_id: int | None = None
 
 class ScoreRequest(BaseModel):
     trace_id: str
@@ -251,6 +254,37 @@ async def get_status(job_id: str):
     
     return response['Item']
 
+@app.get("/api/history")
+async def get_history(user_id: int, limit: int = 20):
+    """Get chat history for a user."""
+    chats = get_user_chats(user_id, limit)
+    return {"chats": chats}
+
+@app.get("/api/chat/{chat_id}/history")
+async def get_chat_history(chat_id: str, user_id: int):
+    """Get messages for a specific chat."""
+    # Verify ownership first
+    chat = get_chat(chat_id)
+    if chat:
+        if str(chat.get('user_id')) != str(user_id):
+            return {"error": "Access denied", "messages": []}
+
+    messages = get_chat_messages(chat_id)
+    return {"messages": messages}
+
+@app.get("/api/chat/{chat_id}")
+async def get_chat_metadata(chat_id: str, user_id: int):
+    """Get chat metadata."""
+    chat = get_chat(chat_id)
+    if not chat:
+         return {"error": "Chat not found"}
+    
+    # Check ownership
+    if str(chat.get('user_id')) != str(user_id):
+        return {"error": "Access denied: You do not have permission to view this chat"}
+
+    return chat
+
 @app.post("/api/cancel/{job_id}")
 async def cancel_job(job_id: str):
     """Cancel a running or queued job."""
@@ -271,8 +305,31 @@ async def cancel_job(job_id: str):
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     print(f"[CHAT] Received question for job {request.job_id}: {request.question}")
+    
+    # Save user message if chat_id provided
+    if request.chat_id:
+        # Check ownership if chat exists
+        existing_chat = get_chat(request.chat_id)
+        if existing_chat and request.user_id and str(existing_chat.get('user_id')) != str(request.user_id):
+            return {"status": "error", "message": "Access denied"}
+
+        save_message(request.chat_id, "user", request.question)
+        if request.user_id:
+            # Upsert chat to update timestamp
+            save_chat(request.user_id, request.chat_id, f"Chat started {datetime.utcnow().isoformat()}", job_id=request.job_id)
+
     try:
         result = process_chat(request.job_id, request.question)
+        
+        # Save agent message
+        if request.chat_id:
+            save_message(
+                request.chat_id, 
+                "agent", 
+                result["content"], 
+                trace_id=result["trace_id"]
+            )
+            
         return {"answer": result["content"], "trace_id": result["trace_id"], "status": "success"}
     except Exception as e:
         print(f"[CHAT] Error: {e}")
@@ -284,14 +341,37 @@ async def chat_stream(request: ChatRequest):
     """Stream chat responses using Server-Sent Events."""
     print(f"[CHAT-STREAM] Received question for job {request.job_id}: {request.question}")
     
+    # Save user message logic
+    if request.chat_id:
+        # Check ownership if chat exists
+        existing_chat = get_chat(request.chat_id)
+        if existing_chat and request.user_id and str(existing_chat.get('user_id')) != str(request.user_id):
+             # For streaming, we yield an error event
+             async def error_generator():
+                 yield f"data: {json.dumps({'type': 'error', 'content': 'Access denied'})}\n\n"
+             return StreamingResponse(error_generator(), media_type="text/event-stream")
+
+        save_message(request.chat_id, "user", request.question)
+        if request.user_id:
+             # Basic title generation strategy: use first message
+             # But here use default/timestamp if first time?
+             # Let frontend handle title or update it later?
+             # For now just save chat to ensure it exists in index
+             save_chat(request.user_id, request.chat_id, title=request.question[:50], job_id=request.job_id)
+
     async def generate():
+        full_response = ""
+        final_trace_id = None
+        
         try:
             async for event in process_chat_stream(request.job_id, request.question):
                 event_type = event.get("type", "")
                 
                 if event_type == "token":
+                    content = event["content"]
+                    full_response += content
                     # Stream individual tokens
-                    data = json.dumps({"type": "token", "content": event["content"]})
+                    data = json.dumps({"type": "token", "content": content})
                     yield f"data: {data}\n\n"
                 
                 elif event_type == "tool_start":
@@ -311,7 +391,8 @@ async def chat_stream(request: ChatRequest):
 
                 elif event_type == "trace_id":
                     # Trace ID received
-                    data = json.dumps({"type": "trace_id", "content": event["content"]})
+                    final_trace_id = event["content"]
+                    data = json.dumps({"type": "trace_id", "content": final_trace_id})
                     yield f"data: {data}\n\n"
                 
                 elif event_type == "error":
@@ -323,6 +404,15 @@ async def chat_stream(request: ChatRequest):
             print(f"[CHAT-STREAM] Error: {e}")
             data = json.dumps({"type": "error", "content": str(e)})
             yield f"data: {data}\n\n"
+        
+        # Save complete agent response
+        if full_response and request.chat_id:
+             save_message(
+                chat_id=request.chat_id,
+                role="agent",
+                content=full_response,
+                trace_id=final_trace_id
+            )
     
     return StreamingResponse(
         generate(),

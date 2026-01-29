@@ -86,6 +86,8 @@ Resources:
           # Application configuration
           JOBS_TABLE: !Ref JobsTable
           USERS_TABLE: !Ref UsersTable
+          CHATS_TABLE: !Ref ChatsTable
+          MESSAGES_TABLE: !Ref MessagesTable
           JOBS_QUEUE_URL: !Ref JobsQueue
           DATA_BUCKET: !Ref DataBucket
           SECRET_NAME: !Ref AppSecrets
@@ -101,6 +103,10 @@ Resources:
             TableName: !Ref JobsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ChatsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MessagesTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt JobsQueue.QueueName
         - S3ReadPolicy:
@@ -343,6 +349,47 @@ Resources:
         PartitionKeys:
           - Name: "job_id"
             Type: "string"
+
+  ChatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-chats"
+      AttributeDefinitions:
+        - AttributeName: chat_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: updated_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chat_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserChatsIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: updated_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-messages"
+      AttributeDefinitions:
+        - AttributeName: chat_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chat_id
+          KeyType: HASH
+        - AttributeName: created_at
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
 
 Outputs:
   ApiUrl:

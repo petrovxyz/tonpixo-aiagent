@@ -4,11 +4,12 @@ import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCube, faStar, faGear } from "@fortawesome/free-solid-svg-icons"
+import { faCube, faStar, faGear, faClockRotateLeft } from "@fortawesome/free-solid-svg-icons"
 import { cn } from "@/lib/utils"
 
 const NAV_ITEMS = [
     { id: "explore", label: "Explore", icon: faCube, path: "/explore" },
+    { id: "history", label: "History", icon: faClockRotateLeft, path: "/history" },
     { id: "favs", label: "Favs", icon: faStar, path: "/favs" },
     { id: "settings", label: "Settings", icon: faGear, path: "/settings" },
 ]

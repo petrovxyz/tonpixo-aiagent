@@ -339,6 +339,7 @@ function ChatContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const addressParam = searchParams.get("address")
+    const chatIdParam = searchParams.get("chat_id")
 
     const { isMobile, user } = useTelegram()
     const { showToast } = useToast()
@@ -349,6 +350,7 @@ function ChatContent() {
     const [count, setCount] = useState<number>(0)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
     const [jobId, setJobId] = useState<string | null>(null)
+    const [chatId, setChatId] = useState<string | null>(null)
     const [streamingContent, setStreamingContent] = useState("")
     const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [pendingAddress, setPendingAddress] = useState<string | null>(null)
@@ -395,6 +397,90 @@ function ChatContent() {
             }
         }
     }, [])
+
+    // Load Chat History
+    // Load Chat History
+    useEffect(() => {
+        const loadHistory = async () => {
+            if (!chatIdParam) {
+                return
+            }
+
+            // Wait for user to be authenticated to verify ownership
+            if (!user) return
+
+            setChatId(chatIdParam)
+            setIsLoading(true)
+
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+
+                // 1. Get Metadata to restore job_id
+                const metaResponse = await axios.get(`${apiUrl}/api/chat/${chatIdParam}`, {
+                    params: { user_id: user.id }
+                })
+
+                if (metaResponse.data.error) {
+                    throw new Error(metaResponse.data.error)
+                }
+
+                if (metaResponse.data && !metaResponse.data.error) {
+                    if (metaResponse.data.job_id) {
+                        setJobId(metaResponse.data.job_id)
+                        activeJobIdRef.current = metaResponse.data.job_id
+                    }
+                }
+
+                // 2. Get Messages
+                const historyResponse = await axios.get(`${apiUrl}/api/chat/${chatIdParam}/history`, {
+                    params: { user_id: user.id }
+                })
+
+                if (historyResponse.data.error) {
+                    throw new Error(historyResponse.data.error)
+                }
+
+                if (historyResponse.data.messages) {
+                    const loadedMessages = historyResponse.data.messages.map((msg: any) => ({
+                        id: msg.message_id || Math.random().toString(36),
+                        role: msg.role,
+                        content: msg.content,
+                        timestamp: new Date(msg.created_at),
+                        traceId: msg.trace_id
+                    }))
+                    setMessages(loadedMessages)
+                }
+
+            } catch (error: any) {
+                console.error("Failed to load history:", error)
+                const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || "Unknown error"
+
+                if (errorMsg.includes("Access denied")) {
+                    showToast("Access denied: you cannot view this chat", "error")
+                    // Redirect to explore after a delay
+                    setTimeout(() => router.push('/explore'), 2000)
+                } else {
+                    showToast("Failed to load chat history", "error")
+                }
+            } finally {
+                setIsLoading(false)
+            }
+        }
+
+        loadHistory()
+    }, [chatIdParam, user])
+
+    // Generate Chat ID if needed when starting interaction
+    const ensureChatId = () => {
+        if (chatId) return chatId
+        const newId = crypto.randomUUID()
+        setChatId(newId)
+        // Update URL without reload
+        const newUrl = new URL(window.location.href)
+        newUrl.searchParams.set('chat_id', newId)
+        window.history.pushState({}, '', newUrl.toString())
+        return newId
+    }
 
     // Get scan type label for messages
     const getScanTypeLabel = (scanType: string) => {
@@ -444,6 +530,10 @@ function ChatContent() {
             } else if (data.status === "success") {
                 setIsLoading(false)
                 setJobId(jobId)
+
+                // Ensure chat ID is set when job succeeds (so we can save interactions)
+                ensureChatId()
+
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center font-bold text-white gap-1">
@@ -740,7 +830,9 @@ function ChatContent() {
                 },
                 body: JSON.stringify({
                     job_id: jobId,
-                    question: question
+                    question: question,
+                    chat_id: ensureChatId(),
+                    user_id: user?.id
                 }),
                 signal: abortControllerRef.current.signal
             })
