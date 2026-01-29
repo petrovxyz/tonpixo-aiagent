@@ -556,7 +556,7 @@ function ChatContent() {
                 ), false, undefined, true)
             } else {
                 const data = response.data
-                const lastActivity = new Date(data.last_activity * 1000).toUTCString()
+                const lastActivity = new Date(data.last_activity * 1000).toUTCString().replace(' GMT', '');
                 const balance = (data.balance / 1000000000).toFixed(2)
 
                 addMessage("agent", (
