@@ -100,7 +100,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
     }
 
     return (
-        <div className="relative w-full aspect-[16/9] overflow-hidden rounded-3xl group isolate touch-pan-y cursor-grab">
+        <div className="relative w-full aspect-[16/9] overflow-hidden rounded-3xl group isolate touch-pan-y cursor-grab border-2 border-white/20">
             <AnimatePresence initial={false} custom={direction} mode="popLayout">
                 <motion.div
                     key={slides[index].id}
@@ -124,7 +124,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                         />
 
                         {/* Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
                         {/* Content */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col items-start gap-2 pointer-events-none select-none">

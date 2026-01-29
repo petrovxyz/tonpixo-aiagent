@@ -66,7 +66,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
             >
                 {/* Drag Handle */}
                 <div className="absolute top-0 left-0 right-0 h-14 flex justify-center items-start pt-3 z-30 cursor-grab active:cursor-grabbing">
-                    <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+                    <div className="w-12 h-1.5 bg-gray-500/50 rounded-full" />
                 </div>
 
                 {/* Close Button (Absolute) */}
