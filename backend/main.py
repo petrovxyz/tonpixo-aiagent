@@ -424,6 +424,27 @@ async def chat_stream(request: ChatRequest):
         }
     )
 
+class InitChatRequest(BaseModel):
+    chat_id: str
+    user_id: int
+    job_id: str
+    title: str = "New Chat"
+
+@app.post("/api/chat/init")
+async def init_chat(request: InitChatRequest):
+    print(f"[CHAT] Initializing chat {request.chat_id} for user {request.user_id}")
+    try:
+        # Check if chat already exists
+        existing_chat = get_chat(request.chat_id)
+        if existing_chat:
+             return {"status": "ok", "message": "Chat already exists"}
+
+        save_chat(request.user_id, request.chat_id, request.title, job_id=request.job_id)
+        return {"status": "ok", "chat_id": request.chat_id}
+    except Exception as e:
+        print(f"[CHAT] Error initializing chat: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/score")
 async def score_trace(request: ScoreRequest):
     """

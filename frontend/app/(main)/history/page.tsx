@@ -72,11 +72,11 @@ export default function HistoryPage() {
     }
 
     return (
-        <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto flex-1 pt-12 pb-24">
+        <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto flex-1">
             <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-3 mb-8"
+                className="flex items-center gap-2 mb-8"
             >
                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
                     <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
@@ -85,7 +85,7 @@ export default function HistoryPage() {
             </motion.div>
 
             {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-white/50 gap-3">
+                <div className="flex flex-col items-center justify-center py-10 text-white/50 gap-3">
                     <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl" />
                     <span>Loading chats...</span>
                 </div>
@@ -93,16 +93,16 @@ export default function HistoryPage() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex flex-col items-center justify-center py-20 text-white/50 text-center"
+                    className="flex flex-col items-center justify-center py-10 text-white/50 text-center"
                 >
-                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 text-2xl">
+                    <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4 text-2xl">
                         <FontAwesomeIcon icon={faMessage} />
                     </div>
                     <p className="font-medium text-lg text-white/80">No history yet</p>
                     <p className="text-sm mt-1">Your conversations will appear here</p>
                     <button
                         onClick={() => router.push('/explore')}
-                        className="mt-6 px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full text-white font-medium transition-colors cursor-pointer"
+                        className="bg-[#0098EA] text-white rounded-full mt-6 py-2 px-6 font-medium text-base shadow-lg items-center justify-center hover:bg-[#0088CC] transition-all active:scale-95 transform duration-200 cursor-pointer"
                     >
                         Start a new chat
                     </button>

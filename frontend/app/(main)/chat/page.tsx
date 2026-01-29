@@ -362,6 +362,11 @@ function ChatContent() {
     const inputRef = useRef<HTMLInputElement>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
     const streamingMsgIdRef = useRef<string | null>(null)
+    const userRef = useRef(user)
+
+    useEffect(() => {
+        userRef.current = user
+    }, [user])
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -531,8 +536,27 @@ function ChatContent() {
                 setIsLoading(false)
                 setJobId(jobId)
 
-                // Ensure chat ID is set when job succeeds (so we can save interactions)
-                ensureChatId()
+                // Initialize chat in backend explicitly so history works immediately
+                const currentChatId = chatId || crypto.randomUUID()
+
+                if (userRef.current) {
+                    try {
+                        await axios.post(`${apiUrl}/api/chat/init`, {
+                            chat_id: currentChatId,
+                            user_id: userRef.current.id,
+                            job_id: jobId,
+                            title: `Analysis: ${scanType}`
+                        })
+                    } catch (e) {
+                        console.error("Failed to init chat:", e)
+                    }
+                }
+
+                // Update state and URL
+                setChatId(currentChatId)
+                const newUrl = new URL(window.location.href)
+                newUrl.searchParams.set('chat_id', currentChatId)
+                window.history.pushState({}, '', newUrl.toString())
 
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
