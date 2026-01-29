@@ -17,5 +17,4 @@ langgraph
 tabulate
 botocore
 langfuse
-matplotlib
 awswrangler

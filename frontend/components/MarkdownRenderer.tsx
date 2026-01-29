@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import React, { useMemo } from 'react'
 import Image from "next/image"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faExpand, faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
+import { motion } from 'framer-motion'
+import { ChartRenderer } from './ChartRenderer'
 
 interface MarkdownRendererProps {
     content: string
@@ -15,8 +14,6 @@ interface MarkdownRendererProps {
     isUserMessage?: boolean
     isStreaming?: boolean
 }
-
-import { motion } from 'framer-motion'
 
 export const AnimatedText = ({ children, isAgent, isStreaming }: { children: React.ReactNode; isAgent: boolean; isStreaming?: boolean }) => {
     if (!isAgent || isStreaming) return <>{children}</>
@@ -55,126 +52,7 @@ export const AnimatedText = ({ children, isAgent, isStreaming }: { children: Rea
     return <>{wrapWords(children)}</>
 }
 
-// Chart Image component for displaying generated charts
-function ChartImage({ src }: { src: string }) {
-    const [isLoading, setIsLoading] = useState(true)
-    const [hasError, setHasError] = useState(false)
-    const [isExpanded, setIsExpanded] = useState(false)
-    const [isMounted, setIsMounted] = useState(false)
-
-    useEffect(() => {
-        setIsMounted(true)
-    }, [])
-
-    if (hasError) {
-        return (
-            <div className="my-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-white/70 text-sm">
-                Failed to load chart
-            </div>
-        )
-    }
-
-    return (
-        <>
-            {/* Chart thumbnail - entire area is tappable */}
-            <div className="my-3">
-                <button
-                    onClick={() => setIsExpanded(true)}
-                    className="relative w-full overflow-hidden rounded-xl bg-[#0a0a0a] border border-white/10 shadow-lg active:scale-[0.98] transition-transform cursor-pointer"
-                    disabled={isLoading}
-                >
-                    {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] z-10">
-                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-[#4FC3F7] text-2xl" />
-                        </div>
-                    )}
-                    <Image
-                        src={src}
-                        alt="Chart"
-                        width={0}
-                        height={0}
-                        sizes="100vw"
-                        style={{ width: '100%', height: 'auto' }}
-                        className={cn(
-                            "transition-opacity duration-300",
-                            isLoading ? "opacity-0" : "opacity-100"
-                        )}
-                        onLoad={() => setIsLoading(false)}
-                        onError={() => {
-                            setIsLoading(false)
-                            setHasError(true)
-                        }}
-                        unoptimized
-                    />
-                    {/* Always visible expand indicator */}
-                    {!isLoading && (
-                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/90 rounded-full flex items-center gap-1.5 text-white text-xs font-medium">
-                            <FontAwesomeIcon icon={faExpand} className="text-[10px]" />
-                            <span>Tap to expand</span>
-                        </div>
-                    )}
-                </button>
-            </div>
-
-            {/* Fullscreen modal */}
-            {isExpanded && isMounted && createPortal(
-                <div
-                    className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
-                    onClick={() => setIsExpanded(false)}
-                >
-                    {/* Close button */}
-                    <div className="flex justify-end p-4 pt-20">
-                        <button
-                            onClick={() => setIsExpanded(false)}
-                            className="w-12 h-12 bg-white/10 active:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
-                        >
-                            <FontAwesomeIcon icon={faTimes} className="text-xl" />
-                        </button>
-                    </div>
-
-                    {/* Image container with pinch-to-zoom hint */}
-                    <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
-                        <Image
-                            src={src}
-                            alt="Chart"
-                            fill
-                            className="object-contain rounded-xl"
-                            onClick={(e) => e.stopPropagation()}
-                            unoptimized
-                        />
-                    </div>
-                </div>,
-                document.body
-            )}
-        </>
-    )
-}
-
-// Parse content and extract chart images (deprecated, now using standard markdown images)
-function parseChartImages(content: string): { text: string; charts: string[] } {
-    const charts: string[] = []
-    let text = content
-
-    // 1. Legacy support: [CHART_IMAGE]url[/CHART_IMAGE]
-    text = text.replace(/\[CHART_IMAGE\]([\s\S]*?)\[\/CHART_IMAGE\]/g, (match, url) => {
-        charts.push(url.trim())
-        return ''
-    })
-
-    // 2. Standard Markdown support for specific chart tag: ![CHART_VISUALIZATION](url)
-    // We Extract this manually to ensure it uses our custom component and isn't affected by parsing issues
-    text = text.replace(/!\[CHART_VISUALIZATION\]\(([^)]+)\)/g, (match, url) => {
-        charts.push(url.trim())
-        return ''
-    })
-
-    return { text: text.trim(), charts }
-}
-
 export function MarkdownRenderer({ content, className, isUserMessage = false, isStreaming = false }: MarkdownRendererProps) {
-    // Parse charts from content
-    const { text, charts } = useMemo(() => parseChartImages(content), [content])
-
     const isAgent = !isUserMessage
 
     const components = useMemo(() => ({
@@ -275,6 +153,19 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
         // Inline code
         code: ({ className, children, ...props }: any) => {
             const isInline = !className?.includes('language-')
+
+            // Check for chart JSON block
+            if (!isInline && className?.includes('language-json:chart')) {
+                try {
+                    const content = String(children).replace(/\n$/, '');
+                    const chartConfig = JSON.parse(content);
+                    return <ChartRenderer config={chartConfig} />;
+                } catch (e) {
+                    console.error("Failed to parse chart JSON", e);
+                    // Fallback to regular code block if parsing fails
+                }
+            }
+
             if (isInline) {
                 return (
                     <code
@@ -290,7 +181,7 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
                     </code>
                 )
             }
-            // Code blocks are handled by the pre component
+
             return (
                 <code className={cn("font-mono text-sm", className)} {...props}>
                     {children}
@@ -299,16 +190,18 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
         },
 
         // Code blocks
-        pre: ({ children }: any) => (
-            <pre className={cn(
-                "my-3 p-4 rounded-xl overflow-x-auto text-sm font-mono",
-                isUserMessage
-                    ? "bg-gray-100 text-gray-800"
-                    : "bg-black/30 text-white/90 border border-white/10"
-            )}>
-                {children}
-            </pre>
-        ),
+        pre: ({ children }: any) => {
+            return (
+                <pre className={cn(
+                    "my-3 p-4 rounded-xl overflow-x-auto text-sm font-mono",
+                    isUserMessage
+                        ? "bg-gray-100 text-gray-800"
+                        : "bg-black/30 text-white/90 border border-white/10"
+                )}>
+                    {children}
+                </pre>
+            )
+        },
 
         // Blockquotes
         blockquote: ({ children }: any) => (
@@ -392,20 +285,11 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
             <td className="px-3 py-2">{children}</td>
         ),
 
-        // Images - Custom handler for Charts
+        // Images 
         img: ({ src, alt }: any) => {
-            const imgSrc = src as string || '';
-            // Check for chart visualization either by specific alt text or URL pattern
-            const isChart = alt === 'CHART_VISUALIZATION' ||
-                imgSrc.includes('/charts/') ||
-                imgSrc.includes('charts%2F');
-
-            if (isChart && imgSrc) {
-                return <ChartImage src={imgSrc} />
-            }
             return (
                 <Image
-                    src={imgSrc}
+                    src={src || ''}
                     alt={alt || ''}
                     width={0}
                     height={0}
@@ -426,20 +310,12 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
                 className
             )}
         >
-            {/* Render charts */}
-            {charts.map((chartUrl, index) => (
-                <ChartImage key={`chart-${index}`} src={chartUrl} />
-            ))}
-
-            {/* Render markdown text */}
-            {text && (
-                <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={components}
-                >
-                    {text}
-                </ReactMarkdown>
-            )}
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={components}
+            >
+                {content}
+            </ReactMarkdown>
         </div>
     )
 }
