@@ -58,10 +58,10 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                             exit={{ opacity: 0, y: 20, scale: 0.9 }}
                             transition={{ duration: 0.2 }}
                             className={cn(
-                                "pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-full shadow-lg border backdrop-blur-md min-w-[300px] max-w-[90vw]",
-                                toast.type === 'success' && "bg-green-500/90 border-green-400 text-white",
-                                toast.type === 'error' && "bg-red-500/90 border-red-400 text-white",
-                                toast.type === 'info' && "bg-[#0098EA]/90 border-white/20 text-white"
+                                "pointer-events-auto flex items-center gap-3 px-4 py-3 inset-shadow-sm inset-shadow-white/30 rounded-full shadow-lg min-w-[300px] max-w-[90vw]",
+                                toast.type === 'success' && "bg-green-500 text-white",
+                                toast.type === 'error' && "bg-red-500 text-white",
+                                toast.type === 'info' && "bg-[#0098EA] text-white"
                             )}
                         >
                             <div className="flex-shrink-0">

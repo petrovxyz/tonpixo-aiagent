@@ -1,7 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCube, faStar, faGear } from "@fortawesome/free-solid-svg-icons"
 import { cn } from "@/lib/utils"
@@ -15,10 +16,52 @@ const NAV_ITEMS = [
 export function BottomNav() {
     const pathname = usePathname()
     const router = useRouter()
+    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
 
     return (
         <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
-            <div className="bg-[#4FC3F7] rounded-full border-2 border-white/20 p-1.5 flex items-center relative shadow-2xl pointer-events-auto w-full max-w-sm inset-shadow-sm inset-shadow-white/30">
+            <div
+                onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const size = Math.max(rect.width, rect.height);
+
+                    const ripple = {
+                        id: Date.now(),
+                        x,
+                        y,
+                        size
+                    };
+
+                    setRipples((prev) => [...prev, ripple]);
+                }}
+                className="bg-[#4FC3F7] rounded-full border-2 border-white/20 p-1.5 flex items-center relative shadow-2xl pointer-events-auto w-full max-w-sm inset-shadow-sm inset-shadow-white/30 overflow-hidden"
+            >
+                <AnimatePresence>
+                    {ripples.map((ripple) => (
+                        <motion.span
+                            key={ripple.id}
+                            initial={{ scale: 0, opacity: 0.35 }}
+                            animate={{ scale: 3, opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            onAnimationComplete={() => {
+                                setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+                            }}
+                            className="absolute bg-white/50 rounded-full pointer-events-none"
+                            style={{
+                                left: ripple.x,
+                                top: ripple.y,
+                                width: ripple.size,
+                                height: ripple.size,
+                                marginLeft: -ripple.size / 2,
+                                marginTop: -ripple.size / 2,
+                            }}
+                        />
+                    ))}
+                </AnimatePresence>
+
                 {NAV_ITEMS.map((item) => {
                     const isActive = pathname === item.path
                     return (

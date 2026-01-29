@@ -41,21 +41,65 @@ const ActionButton = ({
     icon?: React.ReactNode
     variant?: "primary" | "secondary" | "link" | "icon_user" | "icon_agent"
     className?: string
-}) => (
-    <button
-        onClick={onClick}
-        className={cn(
-            "flex items-center justify-center gap-1.5 font-medium transition-all active:scale-[0.98] cursor-pointer",
-            variant === "primary" && "w-full px-4 py-3 rounded-xl bg-[#0098EA] text-white hover:bg-[#0088CC] text-[14px]",
-            variant === "icon_user" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
-            variant === "icon_agent" && "mx-2 p-1.5 rounded-full text-white bg-white/10 hover:bg-white/15 text-sm",
-            className
-        )}
-    >
-        {icon}
-        {children}
-    </button>
-)
+}) => {
+    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
+
+    return (
+        <button
+            onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const size = Math.max(rect.width, rect.height);
+
+                const ripple = {
+                    id: Date.now(),
+                    x,
+                    y,
+                    size
+                };
+
+                setRipples((prev) => [...prev, ripple]);
+                onClick();
+            }}
+            className={cn(
+                "relative flex items-center justify-center gap-1.5 font-medium transition-all active:scale-[0.98] cursor-pointer overflow-hidden",
+                variant === "primary" && "w-full px-4 py-3 rounded-xl bg-[#0098EA] text-white hover:bg-[#0088CC] text-[14px]",
+                variant === "icon_user" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
+                variant === "icon_agent" && "mx-2 p-1.5 rounded-full text-white bg-white/10 hover:bg-white/15 text-sm",
+                className
+            )}
+        >
+            <AnimatePresence>
+                {ripples.map((ripple) => (
+                    <motion.span
+                        key={ripple.id}
+                        initial={{ scale: 0, opacity: 0.35 }}
+                        animate={{ scale: 4, opacity: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        onAnimationComplete={() => {
+                            setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+                        }}
+                        className="absolute bg-white/50 rounded-full pointer-events-none"
+                        style={{
+                            left: ripple.x,
+                            top: ripple.y,
+                            width: ripple.size,
+                            height: ripple.size,
+                            marginLeft: -ripple.size / 2,
+                            marginTop: -ripple.size / 2,
+                        }}
+                    />
+                ))}
+            </AnimatePresence>
+            <span className="relative z-10 flex items-center gap-1.5">
+                {icon}
+                {children}
+            </span>
+        </button>
+    )
+}
 
 // Explorer Link Button - opens in new tab
 const ExplorerLink = ({

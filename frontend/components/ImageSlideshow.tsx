@@ -21,6 +21,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
     const [direction, setDirection] = useState(0)
     const [isDragging, setIsDragging] = useState(false)
     const [isTransitioning, setIsTransitioning] = useState(false)
+    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
 
     // Auto-advance
     useEffect(() => {
@@ -131,13 +132,53 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                                 initial={{ opacity: 0, y: 70 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
-                                onClick={() => onSlideClick?.(index)}
-                                className="pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-[#0088CC]/90 active:scale-95 transition-all duration-200 rounded-full px-5 py-2 cursor-pointer"
+                                onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const x = e.clientX - rect.left;
+                                    const y = e.clientY - rect.top;
+                                    const size = Math.max(rect.width, rect.height);
+
+                                    const ripple = {
+                                        id: Date.now(),
+                                        x,
+                                        y,
+                                        size
+                                    };
+
+                                    setRipples((prev) => [...prev, ripple]);
+                                    onSlideClick?.(index);
+                                }}
+                                className="relative pointer-events-auto w-full flex items-center gap-3 text-white text-[18px] font-semibold tracking-tight bg-[#0098EA]/90 hover:bg-[#0088CC]/90 active:scale-95 transition-all duration-200 rounded-full px-5 py-2 cursor-pointer overflow-hidden"
                             >
-                                <span>{slides[index].title}</span>
-                                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                                    <FontAwesomeIcon icon={faArrowUp} className="text-[10px] transform rotate-45" />
-                                </div>
+                                <AnimatePresence>
+                                    {ripples.map((ripple) => (
+                                        <motion.span
+                                            key={ripple.id}
+                                            initial={{ scale: 0, opacity: 0.35 }}
+                                            animate={{ scale: 4, opacity: 0 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.6, ease: "easeOut" }}
+                                            onAnimationComplete={() => {
+                                                setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+                                            }}
+                                            className="absolute bg-white/50 rounded-full pointer-events-none"
+                                            style={{
+                                                left: ripple.x,
+                                                top: ripple.y,
+                                                width: ripple.size,
+                                                height: ripple.size,
+                                                marginLeft: -ripple.size / 2,
+                                                marginTop: -ripple.size / 2,
+                                            }}
+                                        />
+                                    ))}
+                                </AnimatePresence>
+                                <span className="relative z-10 flex items-center gap-3 w-full">
+                                    <span>{slides[index].title}</span>
+                                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center ml-auto">
+                                        <FontAwesomeIcon icon={faArrowUp} className="text-[10px] transform rotate-45" />
+                                    </div>
+                                </span>
                             </motion.button>
                         </div>
                     </div>
