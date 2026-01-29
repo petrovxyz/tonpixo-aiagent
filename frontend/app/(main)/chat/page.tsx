@@ -403,7 +403,9 @@ function ChatContent() {
         }
     }, [])
 
-    // Load Chat History
+    // Ref to track if history has been loaded to prevent duplicate loads
+    const historyLoadedRef = useRef<string | null>(null)
+
     // Load Chat History
     useEffect(() => {
         const loadHistory = async () => {
@@ -411,9 +413,17 @@ function ChatContent() {
                 return
             }
 
+            // Prevent duplicate loading for the same chat
+            if (historyLoadedRef.current === chatIdParam) {
+                console.log(`[CHAT] History already loaded for chat ${chatIdParam}, skipping`)
+                return
+            }
+
             // Wait for user to be authenticated to verify ownership
             if (!user) return
 
+            console.log(`[CHAT] Loading history for chat ${chatIdParam}`)
+            historyLoadedRef.current = chatIdParam
             setChatId(chatIdParam)
             setIsLoading(true)
 
@@ -453,11 +463,13 @@ function ChatContent() {
                         timestamp: new Date(msg.created_at),
                         traceId: msg.trace_id
                     }))
+                    console.log(`[CHAT] Loaded ${loadedMessages.length} messages from history`)
                     setMessages(loadedMessages)
                 }
 
             } catch (error: any) {
                 console.error("Failed to load history:", error)
+                historyLoadedRef.current = null // Reset so it can retry
                 const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || "Unknown error"
 
                 if (errorMsg.includes("Access denied")) {
@@ -1106,6 +1118,13 @@ function ChatContent() {
     }
 
     useEffect(() => {
+        // Skip if we're loading an existing chat from history
+        // The loadHistory effect will handle setting up messages
+        if (chatIdParam) {
+            hasStartedRef.current = true
+            return
+        }
+
         if (addressParam && !hasStartedRef.current) {
             hasStartedRef.current = true
             addMessage("user", `Search: ${addressParam}`)
@@ -1115,7 +1134,7 @@ function ChatContent() {
             hasStartedRef.current = true
             addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
         }
-    }, [addressParam])
+    }, [addressParam, chatIdParam])
 
     return (
         <div className="relative w-full h-[100dvh] flex flex-col">
