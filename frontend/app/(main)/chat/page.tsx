@@ -561,23 +561,21 @@ function ChatContent() {
 
                 addMessage("agent", (
                     <div className="flex flex-col gap-4">
-                        <div className="text-white space-y-2 text-sm bg-black/20 p-4 rounded-xl border border-white/10">
-                            <h3 className="font-bold text-[#0098EA] mb-2 text-base">Account details</h3>
-                            <div className="grid grid-cols-[120px_1fr] gap-x-2 gap-y-1">
-                                <span className="text-white">Raw address: <span className="font-mono text-xs break-all">{data.address}</span></span>
+                        <div className="text-white space-y-2 text-sm bg-black/10 p-4 rounded-xl">
+                            <h3 className="font-bold text-white mb-2 text-base">Account details</h3>
+                            <span className="text-white"><span className="font-semibold">Raw address:</span> <span className="font-mono text-xs break-all">{data.address}</span></span>
 
-                                <span className="text-white">Status: {data.status}</span>
+                            <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
 
-                                <span className="text-white">Is wallet: {data.is_wallet ? "yes" : "no"}</span>
+                            <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.is_wallet ? "yes" : "no"}</span>
 
-                                <span className="text-white">Interfaces: {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
+                            <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
 
-                                <span className="text-white">Last activity: {lastActivity}</span>
+                            <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity}</span>
 
-                                <span className="text-white">Balance: {balance} TON</span>
+                            <span className="text-white"><span className="font-semibold">Balance:</span> {balance} TON</span>
 
-                                <span className="text-white">Is scam: {data.is_scam ? "yes" : "no"}</span>
-                            </div>
+                            <span className="text-white"><span className="font-semibold">Is scam:</span> {data.is_scam ? "yes" : "no"}</span>
                         </div>
 
                         <p className="text-white">
