@@ -255,10 +255,27 @@ async def get_status(job_id: str):
     return response['Item']
 
 @app.get("/api/history")
-async def get_history(user_id: int, limit: int = 20):
-    """Get chat history for a user."""
-    chats = get_user_chats(user_id, limit)
-    return {"chats": chats}
+async def get_history(user_id: int, limit: int = 10, last_key: str = None):
+    """Get chat history for a user with pagination."""
+    import json
+    import base64
+    
+    # Decode last_key if provided (base64 encoded JSON)
+    decoded_last_key = None
+    if last_key:
+        try:
+            decoded_last_key = json.loads(base64.b64decode(last_key).decode('utf-8'))
+        except Exception as e:
+            print(f"Error decoding last_key: {e}")
+    
+    chats, next_key = get_user_chats(user_id, limit, decoded_last_key)
+    
+    # Encode next_key for client (base64 encoded JSON)
+    encoded_next_key = None
+    if next_key:
+        encoded_next_key = base64.b64encode(json.dumps(next_key).encode('utf-8')).decode('utf-8')
+    
+    return {"chats": chats, "next_key": encoded_next_key}
 
 @app.get("/api/chat/{chat_id}/history")
 async def get_chat_history(chat_id: str, user_id: int):

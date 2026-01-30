@@ -760,6 +760,51 @@ function ChatContent() {
                     </div>
                 ), false, undefined, true)
             }
+
+            // Save to backend for history
+            const currentChatId = chatIdRef.current || crypto.randomUUID()
+            if (!chatIdRef.current) {
+                chatIdRef.current = currentChatId
+                setChatId(currentChatId)
+                // Update URL
+                const newUrl = new URL(window.location.href)
+                newUrl.searchParams.set('chat_id', currentChatId)
+                window.history.pushState({}, '', newUrl.toString())
+            }
+
+            if (userRef.current) {
+                try {
+                    const data = response.data
+                    const lastActivity = data.last_activity ? new Date(data.last_activity * 1000).toUTCString().replace(' GMT', '') : 'Unknown'
+                    const balance = data.balance ? (data.balance / 1000000000).toFixed(2) : '0.00'
+
+                    // Build markdown for storage
+                    const addressDetailsMarkdown = data.error
+                        ? `Got it! I've received the address. You can explore it on [Tonviewer](https://tonviewer.com/${address}).`
+                        : `### Address details\n\n**Raw address:** \`${data.address}\`\n**Status:** ${data.status}\n**Is wallet:** ${data.is_wallet ? 'yes' : 'no'}\n**Interfaces:** ${data.interfaces ? data.interfaces.join(', ') : 'none'}\n**Last activity:** ${lastActivity} UTC\n**Balance:** ${balance} TON\n**Is scam:** ${data.is_scam ? 'yes' : 'no'}\n\nGot it! I've received the address. You can explore it on [Tonviewer](https://tonviewer.com/${address}).`
+
+                    // 1. Init chat
+                    await axios.post(`${apiUrl}/api/chat/init`, {
+                        chat_id: currentChatId,
+                        user_id: userRef.current.id,
+                        title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`
+                    })
+
+                    // 2. Save user message (the address they entered)
+                    await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                        role: "user",
+                        content: `Address: ${address}`
+                    })
+
+                    // 3. Save agent response
+                    await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                        role: "agent",
+                        content: addressDetailsMarkdown
+                    })
+                } catch (e) {
+                    console.error("Failed to save address details to history:", e)
+                }
+            }
         } catch (err) {
             // Remove loading message
             setMessages(prev => prev.filter(m => m.id !== loadingId))

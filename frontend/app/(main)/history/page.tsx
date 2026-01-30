@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faMessage, faSpinner, faChevronRight, faClock } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
-import { cn } from "@/lib/utils"
 
 interface ChatSession {
     chat_id: string
@@ -20,40 +19,68 @@ export default function HistoryPage() {
     const { user } = useTelegram()
     const [chats, setChats] = useState<ChatSession[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [nextKey, setNextKey] = useState<string | null>(null)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+    const fetchHistory = useCallback(async (lastKey?: string | null) => {
+        if (!user?.id) return
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const params: { user_id: number; limit: number; last_key?: string } = {
+                user_id: user.id,
+                limit: 10
+            }
+            if (lastKey) {
+                params.last_key = lastKey
+            }
+
+            const response = await axios.get(`${apiUrl}/api/history`, { params })
+            const newChats = response.data.chats || []
+
+            if (lastKey) {
+                // Appending to existing chats
+                setChats(prev => [...prev, ...newChats])
+            } else {
+                // Initial load
+                setChats(newChats)
+            }
+
+            setNextKey(response.data.next_key || null)
+        } catch (error) {
+            console.error("Failed to load history:", error)
+        }
+    }, [user])
 
     useEffect(() => {
-        const fetchHistory = async () => {
+        const loadInitial = async () => {
             if (!user?.id) {
-                // If checking auth or no user, maybe wait? 
-                // For now, if no user id after some time, stop loading
-                if (user === null) return; // Wait for user to be loaded (or null if not logged in?)
-                // Assuming user is loaded eventually or remains null
+                if (user === null) {
+                    setIsLoading(false)
+                }
+                return
             }
 
-            if (!user?.id) return
-
-            try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
-                const response = await axios.get(`${apiUrl}/api/history`, {
-                    params: { user_id: user.id }
-                })
-                setChats(response.data.chats || [])
-            } catch (error) {
-                console.error("Failed to load history:", error)
-            } finally {
-                setIsLoading(false)
-            }
+            setIsLoading(true)
+            await fetchHistory()
+            setIsLoading(false)
         }
 
         if (user) {
-            fetchHistory()
+            loadInitial()
         } else {
-            // Short timeout to allow user context to load? 
-            // Or just rely on useEffect dependency
             setIsLoading(false)
         }
-    }, [user])
+    }, [user, fetchHistory])
+
+    const loadMore = async () => {
+        if (!nextKey || isLoadingMore) return
+        setIsLoadingMore(true)
+        await fetchHistory(nextKey)
+        setIsLoadingMore(false)
+    }
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString)
@@ -71,116 +98,155 @@ export default function HistoryPage() {
         return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
     }
 
+    const createRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const size = Math.max(rect.width, rect.height)
+
+        const ripple = { id: Date.now(), x, y, size }
+        setRipples(prev => [...prev, ripple])
+    }
+
     return (
-        <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto flex-1">
+        <div className="relative w-full flex flex-col h-full max-w-2xl mx-auto overflow-hidden">
+            {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 mb-4"
+                className="flex items-center gap-3 px-6 py-4 shrink-0"
             >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/15 to-white/5 flex items-center justify-center backdrop-blur-sm border border-white/10">
                     <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
                 </div>
-                <h1 className="text-2xl font-bold text-white">History</h1>
+                <div>
+                    <h1 className="text-xl font-bold text-white">History</h1>
+                    <p className="text-white/40 text-xs">{chats.length} conversation{chats.length !== 1 ? 's' : ''}</p>
+                </div>
             </motion.div>
 
-            {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-10 text-white/50 gap-3">
-                    <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl" />
-                    <span>Loading chats...</span>
-                </div>
-            ) : chats.length === 0 ? (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex flex-col items-center justify-center py-10 text-white/50 text-center"
-                >
-                    <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4 text-2xl">
-                        <FontAwesomeIcon icon={faMessage} />
+            {/* Scrollable Container */}
+            <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto px-6 pb-24"
+                style={{
+                    maskImage: 'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 60px), transparent 100%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 60px), transparent 100%)'
+                }}
+            >
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-white/50 gap-3">
+                        <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
+                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xl" />
+                        </div>
+                        <span className="text-sm">Loading chats...</span>
                     </div>
-                    <p className="font-medium text-lg text-white/80">No history yet</p>
-                    <p className="text-sm mt-1">Your conversations will appear here</p>
-                    <button
-                        onClick={() => router.push('/explore')}
-                        className="bg-[#0098EA] text-white rounded-full mt-6 py-2 px-6 font-medium text-base shadow-lg items-center justify-center hover:bg-[#0088CC] transition-all active:scale-95 transform duration-200 cursor-pointer"
+                ) : chats.length === 0 ? (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center justify-center py-16 text-center"
                     >
-                        Start a new chat
-                    </button>
-                </motion.div>
-            ) : (
-                <div className="flex flex-col gap-2 pb-12">
-                    {chats.map((chat, index) => (
-                        <motion.div
-                            key={chat.chat_id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center mb-5 border border-white/10">
+                            <FontAwesomeIcon icon={faMessage} className="text-white/60 text-2xl" />
+                        </div>
+                        <p className="font-semibold text-lg text-white mb-1">No history yet</p>
+                        <p className="text-white/40 text-sm mb-6">Your conversations will appear here</p>
+                        <button
+                            onClick={() => router.push('/explore')}
+                            className="bg-gradient-to-r from-[#0098EA] to-[#0088CC] text-white rounded-full py-2.5 px-8 font-medium text-sm shadow-lg shadow-[#0098EA]/20 hover:shadow-[#0098EA]/30 transition-all active:scale-95 transform duration-200 cursor-pointer"
                         >
-                            <button
-                                onClick={(e) => {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const x = e.clientX - rect.left;
-                                    const y = e.clientY - rect.top;
-                                    const size = Math.max(rect.width, rect.height);
-
-                                    const ripple = {
-                                        id: Date.now(),
-                                        x,
-                                        y,
-                                        size
-                                    };
-                                    setRipples(prev => [...prev, ripple]);
-
-                                    // Delay navigation slightly for ripple
-                                    setTimeout(() => {
-                                        router.push(`/chat?chat_id=${chat.chat_id}`)
-                                    }, 200)
-                                }}
-                                className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 border border-white/5 rounded-2xl p-4 text-left transition-all active:scale-[0.99] group cursor-pointer"
+                            Start exploring
+                        </button>
+                    </motion.div>
+                ) : (
+                    <div className="flex flex-col gap-2 pt-2">
+                        {chats.map((chat, index) => (
+                            <motion.div
+                                key={chat.chat_id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: Math.min(index * 0.03, 0.3) }}
                             >
-                                <AnimatePresence>
-                                    {ripples.map((ripple) => (
-                                        <motion.span
-                                            key={ripple.id}
-                                            initial={{ scale: 0, opacity: 0.35 }}
-                                            animate={{ scale: 4, opacity: 0 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.6, ease: "easeOut" }}
-                                            onAnimationComplete={() => {
-                                                setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
-                                            }}
-                                            className="absolute bg-white/20 rounded-full pointer-events-none"
-                                            style={{
-                                                left: ripple.x,
-                                                top: ripple.y,
-                                                width: ripple.size,
-                                                height: ripple.size,
-                                                marginLeft: -ripple.size / 2,
-                                                marginTop: -ripple.size / 2,
-                                            }}
-                                        />
-                                    ))}
-                                </AnimatePresence>
+                                <button
+                                    onClick={(e) => {
+                                        createRipple(e)
+                                        setTimeout(() => {
+                                            router.push(`/chat?chat_id=${chat.chat_id}`)
+                                        }, 150)
+                                    }}
+                                    className="w-full relative overflow-hidden bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] rounded-xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
+                                >
+                                    <AnimatePresence>
+                                        {ripples.map((ripple) => (
+                                            <motion.span
+                                                key={ripple.id}
+                                                initial={{ scale: 0, opacity: 0.35 }}
+                                                animate={{ scale: 4, opacity: 0 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.6, ease: "easeOut" }}
+                                                onAnimationComplete={() => {
+                                                    setRipples((prev) => prev.filter((r) => r.id !== ripple.id))
+                                                }}
+                                                className="absolute bg-white/20 rounded-full pointer-events-none"
+                                                style={{
+                                                    left: ripple.x,
+                                                    top: ripple.y,
+                                                    width: ripple.size,
+                                                    height: ripple.size,
+                                                    marginLeft: -ripple.size / 2,
+                                                    marginTop: -ripple.size / 2,
+                                                }}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
 
-                                <div className="flex justify-between items-start gap-3">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-white font-medium truncate text-[15px] mb-1">
-                                            {chat.title || "New Chat"}
-                                        </h3>
-                                        <span className="text-white/40 text-xs">
-                                            {formatDate(chat.updated_at)}
-                                        </span>
+                                    <div className="flex justify-between items-center gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-white font-medium truncate text-[15px] mb-0.5">
+                                                {chat.title || "New Chat"}
+                                            </h3>
+                                            <span className="text-white/35 text-xs">
+                                                {formatDate(chat.updated_at)}
+                                            </span>
+                                        </div>
+                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10 group-hover:translate-x-1">
+                                            <FontAwesomeIcon
+                                                icon={faChevronRight}
+                                                className="text-white/30 text-[10px] transition-colors group-hover:text-white/50"
+                                            />
+                                        </div>
                                     </div>
-                                    <FontAwesomeIcon
-                                        icon={faChevronRight}
-                                        className="text-white/20 text-xs mt-1 transition-transform group-hover:translate-x-1"
-                                    />
-                                </div>
-                            </button>
-                        </motion.div>
-                    ))}
-                </div>
-            )}
+                                </button>
+                            </motion.div>
+                        ))}
+
+                        {/* Load More Button */}
+                        {nextKey && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="flex justify-center py-4"
+                            >
+                                <button
+                                    onClick={loadMore}
+                                    disabled={isLoadingMore}
+                                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoadingMore ? (
+                                        <>
+                                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xs" />
+                                            <span>Loading...</span>
+                                        </>
+                                    ) : (
+                                        <span>Load more</span>
+                                    )}
+                                </button>
+                            </motion.div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

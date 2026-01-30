@@ -98,25 +98,33 @@ def save_message(chat_id: str, role: str, content: str, trace_id: str = None):
         print(f"Error saving message: {e}")
         return None
 
-def get_user_chats(user_id: int, limit: int = 20):
+def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
     """
     Retrieves chats for a specific user, sorted by recently updated.
+    Supports pagination via last_key.
     """
     if not CHATS_TABLE_NAME:
-        return []
+        return [], None
 
     try:
         table = get_chats_table()
-        response = table.query(
-            IndexName='UserChatsIndex',
-            KeyConditionExpression=Key('user_id').eq(str(user_id)),
-            ScanIndexForward=False, # Descending order (newest first)
-            Limit=limit
-        )
-        return response.get('Items', [])
+        query_params = {
+            'IndexName': 'UserChatsIndex',
+            'KeyConditionExpression': Key('user_id').eq(str(user_id)),
+            'ScanIndexForward': False, # Descending order (newest first)
+            'Limit': limit
+        }
+        
+        if last_key:
+            query_params['ExclusiveStartKey'] = last_key
+            
+        response = table.query(**query_params)
+        items = response.get('Items', [])
+        next_key = response.get('LastEvaluatedKey')
+        return items, next_key
     except ClientError as e:
         print(f"Error fetching chats for user {user_id}: {e}")
-        return []
+        return [], None
 
 def get_chat_messages(chat_id: str):
     """
