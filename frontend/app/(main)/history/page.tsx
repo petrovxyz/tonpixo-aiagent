@@ -126,7 +126,7 @@ export default function HistoryPage() {
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">History</h1>
-                    <p className="text-white/40 text-xs">
+                    <p className="text-white/50 text-xs">
                         {totalCount !== null ? totalCount : chats.length} conversation{(totalCount !== null ? totalCount : chats.length) !== 1 ? 's' : ''}
                     </p>
                 </div>
