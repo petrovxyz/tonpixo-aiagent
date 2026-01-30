@@ -22,7 +22,7 @@ export default function HistoryPage() {
     const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [nextKey, setNextKey] = useState<string | null>(null)
     const [totalCount, setTotalCount] = useState<number | null>(null)
-    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
+    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number; chatId?: string }[]>([])
 
     const fetchHistory = useCallback(async (lastKey?: string | null) => {
         if (!user?.id) return
@@ -103,13 +103,13 @@ export default function HistoryPage() {
         return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
     }
 
-    const createRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const createRipple = (e: React.MouseEvent<HTMLButtonElement>, chatId?: string) => {
         const rect = e.currentTarget.getBoundingClientRect()
         const x = e.clientX - rect.left
         const y = e.clientY - rect.top
         const size = Math.max(rect.width, rect.height)
 
-        const ripple = { id: Date.now(), x, y, size }
+        const ripple = { id: Date.now(), x, y, size, chatId }
         setRipples(prev => [...prev, ripple])
     }
 
@@ -134,7 +134,7 @@ export default function HistoryPage() {
 
             {/* Chat List Container - max height limits, scrollable when needed */}
             <div
-                className="flex-1 overflow-y-auto rounded-2xl pb-20"
+                className="flex-1 overflow-y-auto overflow-x-hidden rounded-2xl pb-20"
                 style={{
                     maxHeight: 'calc(95vh - 260px)', // Account for header, top bar, and bottom nav
                     minHeight: '200px'
@@ -151,7 +151,7 @@ export default function HistoryPage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="flex flex-col items-center justify-center py-16 text-center"
+                        className="flex flex-col items-center justify-center py-8 text-center"
                     >
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center mb-5 border border-white/10">
                             <FontAwesomeIcon icon={faMessage} className="text-white/60 text-2xl" />
@@ -160,7 +160,7 @@ export default function HistoryPage() {
                         <p className="text-white/50 font-medium text-sm mb-6">Your conversations will appear here</p>
                         <button
                             onClick={() => router.push('/explore')}
-                            className="bg-gradient-to-r from-[#0098EA] to-[#0088CC] text-white rounded-full py-2.5 px-8 font-medium text-sm shadow-lg shadow-[#0098EA]/20 hover:shadow-[#0098EA]/30 transition-all active:scale-95 transform duration-200 cursor-pointer"
+                            className="bg-gradient-to-r bg-[#0098EA] hover:bg-[#0088CC] text-white rounded-full py-3 w-[150px] font-medium text-sm shadow-lg transition-all active:scale-95 transform duration-200 cursor-pointer"
                         >
                             Start exploring
                         </button>
@@ -176,7 +176,7 @@ export default function HistoryPage() {
                             >
                                 <button
                                     onClick={(e) => {
-                                        createRipple(e)
+                                        createRipple(e, chat.chat_id)
                                         setTimeout(() => {
                                             router.push(`/chat?chat_id=${chat.chat_id}`)
                                         }, 150)
@@ -184,7 +184,7 @@ export default function HistoryPage() {
                                     className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
                                 >
                                     <AnimatePresence>
-                                        {ripples.map((ripple) => (
+                                        {ripples.filter(r => r.chatId === chat.chat_id).map((ripple) => (
                                             <motion.span
                                                 key={ripple.id}
                                                 initial={{ scale: 0, opacity: 0.35 }}
@@ -237,7 +237,7 @@ export default function HistoryPage() {
                                 <button
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
-                                    className="flex items-center gap-2 cursor-pointer px-6 py-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 cursor-pointer px-6 w-[150px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isLoadingMore ? (
                                         <>

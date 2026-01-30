@@ -71,7 +71,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                 </div>
             )}
 
-            <div className={cn("flex-1 relative z-20 w-full overflow-auto", !isChatPage && "mt-4")}>
+            <div className={cn("flex-1 relative z-20 w-full overflow-y-auto overflow-x-hidden", !isChatPage && "mt-4")}>
                 <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                     <motion.div
                         key={pathname}

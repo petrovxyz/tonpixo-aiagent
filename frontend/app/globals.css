@@ -12,10 +12,14 @@
   --font-display: var(--font-display);
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
 }
