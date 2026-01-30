@@ -364,10 +364,16 @@ function ChatContent() {
     const streamingMsgIdRef = useRef<string | null>(null)
     const userRef = useRef(user)
     const activeSessionRef = useRef(false) // Track if messages were added during this session
+    const chatIdRef = useRef<string | null>(null) // Track current chatId for closures
 
     useEffect(() => {
         userRef.current = user
     }, [user])
+
+    // Keep chatIdRef in sync with chatId state
+    useEffect(() => {
+        chatIdRef.current = chatId
+    }, [chatId])
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -497,9 +503,11 @@ function ChatContent() {
 
     // Generate Chat ID if needed when starting interaction
     const ensureChatId = () => {
-        if (chatId) return chatId
+        // Use ref to get the latest value, avoiding stale closures
+        if (chatIdRef.current) return chatIdRef.current
         const newId = crypto.randomUUID()
         setChatId(newId)
+        chatIdRef.current = newId // Update ref immediately
         // Update URL without reload
         const newUrl = new URL(window.location.href)
         newUrl.searchParams.set('chat_id', newId)
@@ -557,7 +565,10 @@ function ChatContent() {
                 setJobId(jobId)
 
                 // Initialize chat in backend explicitly so history works immediately
-                const currentChatId = chatId || crypto.randomUUID()
+                const currentChatId = chatIdRef.current || crypto.randomUUID()
+                if (!chatIdRef.current) {
+                    chatIdRef.current = currentChatId // Update ref immediately
+                }
 
                 if (userRef.current) {
                     try {
