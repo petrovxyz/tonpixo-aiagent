@@ -76,7 +76,7 @@ export default function HistoryPage() {
             <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 mb-8"
+                className="flex items-center gap-2 mb-4"
             >
                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
                     <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
@@ -108,7 +108,7 @@ export default function HistoryPage() {
                     </button>
                 </motion.div>
             ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 pb-12">
                     {chats.map((chat, index) => (
                         <motion.div
                             key={chat.chat_id}

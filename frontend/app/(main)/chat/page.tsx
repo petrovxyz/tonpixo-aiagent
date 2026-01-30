@@ -363,6 +363,7 @@ function ChatContent() {
     const abortControllerRef = useRef<AbortController | null>(null)
     const streamingMsgIdRef = useRef<string | null>(null)
     const userRef = useRef(user)
+    const activeSessionRef = useRef(false) // Track if messages were added during this session
 
     useEffect(() => {
         userRef.current = user
@@ -416,6 +417,13 @@ function ChatContent() {
             // Prevent duplicate loading for the same chat
             if (historyLoadedRef.current === chatIdParam) {
                 console.log(`[CHAT] History already loaded for chat ${chatIdParam}, skipping`)
+                return
+            }
+
+            // If this is an active session where messages were added, don't overwrite them
+            if (activeSessionRef.current) {
+                console.log(`[CHAT] Skipping history load - active session in progress`)
+                historyLoadedRef.current = chatIdParam
                 return
             }
 
@@ -827,6 +835,8 @@ function ChatContent() {
 
 
     const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false, traceId?: string, isSystemMessage = false) => {
+        // Mark that we're in an active session to prevent loadHistory from overwriting
+        activeSessionRef.current = true
         setMessages(prev => [
             ...prev.filter(m => m.content !== "collecting" && m.content !== "thinking"),
             {
