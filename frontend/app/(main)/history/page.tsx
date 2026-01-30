@@ -121,8 +121,8 @@ export default function HistoryPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-3 py-2 mb-4"
             >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/15 to-white/5 flex items-center justify-center backdrop-blur-sm border border-white/10">
-                    <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/10">
+                    <FontAwesomeIcon icon={faClock} className="text-white text-lg font-medium" />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">History</h1>
@@ -134,7 +134,7 @@ export default function HistoryPage() {
 
             {/* Chat List Container - max height limits, scrollable when needed */}
             <div
-                className="flex-1 overflow-y-auto rounded-2xl"
+                className="flex-1 overflow-y-auto rounded-2xl mb-10"
                 style={{
                     maxHeight: 'calc(95vh - 260px)', // Account for header, top bar, and bottom nav
                     minHeight: '200px'
