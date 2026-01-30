@@ -44,25 +44,20 @@ export default function Preloader() {
                         opacity: 0,
                         transition: { duration: 1, ease: [0.43, 0.13, 0.23, 0.96] }
                     }}
-                    className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-[#4FC3F7] to-[#29B6F6]"
+                    className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
                 >
-                    <div className="relative flex flex-col items-center z-10 px-8 text-center">
-                        {/* Outer Glow Ring */}
-                        <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{
-                                scale: [0.8, 1.2, 1],
-                                opacity: telegramError ? 0.1 : [0, 0.3, 0.1], // stabilize if error
-                            }}
-                            transition={{
-                                duration: 2.5,
-                                repeat: telegramError ? 0 : Infinity,
-                                ease: "easeInOut"
-                            }}
-                            className="absolute inset-[-60px] rounded-full bg-white/40 blur-[80px]"
-                        />
+                    <Image
+                        src="/images/preloader.webp"
+                        alt="Preloader background"
+                        fill
+                        className="object-cover"
+                        priority
+                    />
+                    {/* Optional: Add a subtle overlay to maintain contrast for the logo/text if needed */}
+                    <div className="absolute inset-0 transition-opacity" />
 
-                        {/* Logo Container */}
+                    <div className="relative flex flex-col items-center z-10 px-8 text-center">
+                        {/* Logo & Text Container */}
                         <motion.div
                             initial={{ scale: 0.8, opacity: 0, y: 10 }}
                             animate={{
@@ -74,15 +69,18 @@ export default function Preloader() {
                                     ease: [0.43, 0.13, 0.23, 0.96]
                                 }
                             }}
-                            className="relative mb-8"
+                            className="flex items-center gap-2 text-[32px] font-extrabold font-sans tracking-tight mb-6"
                         >
-                            <Image
-                                src="/logo.svg"
-                                alt="TONPixo Logo"
-                                width={120}
-                                height={120}
-                                priority
-                            />
+                            <div className="relative w-12 h-12">
+                                <Image
+                                    src="/logo.svg"
+                                    alt="Tonpixo logo"
+                                    fill
+                                    className="object-contain"
+                                    priority
+                                />
+                            </div>
+                            <span className="text-black">tonpixo</span>
                         </motion.div>
 
                         {/* Error Message or Progress */}
@@ -102,7 +100,7 @@ export default function Preloader() {
                             </motion.div>
                         ) : (
                             <motion.div
-                                className="h-[6px] w-32 bg-black/10 rounded-full overflow-hidden"
+                                className="h-[6px] w-28 bg-black/10 rounded-full overflow-hidden"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.6 }}

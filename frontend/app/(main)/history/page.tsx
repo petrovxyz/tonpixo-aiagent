@@ -241,7 +241,7 @@ export default function HistoryPage() {
                                 >
                                     {isLoadingMore ? (
                                         <>
-                                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xs" />
+                                            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xs mr-2" />
                                             <span>Loading...</span>
                                         </>
                                     ) : (
