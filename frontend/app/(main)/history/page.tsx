@@ -237,7 +237,7 @@ export default function HistoryPage() {
                                 <button
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
-                                    className="flex items-center gap-2 cursor-pointer px-6 w-[150px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 cursor-pointer py-3 w-[150px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 active:scale-95 transform duration-200 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isLoadingMore ? (
                                         <>
