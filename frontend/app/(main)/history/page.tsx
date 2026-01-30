@@ -136,7 +136,7 @@ export default function HistoryPage() {
             <div
                 className="flex-1 overflow-y-auto rounded-2xl"
                 style={{
-                    maxHeight: 'calc(100vh - 260px)', // Account for header, top bar, and bottom nav
+                    maxHeight: 'calc(95vh - 260px)', // Account for header, top bar, and bottom nav
                     minHeight: '200px'
                 }}
             >
@@ -216,7 +216,7 @@ export default function HistoryPage() {
                                                 {formatDate(chat.updated_at)}
                                             </span>
                                         </div>
-                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10 group-hover:translate-x-1">
+                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10">
                                             <FontAwesomeIcon
                                                 icon={faChevronRight}
                                                 className="text-white/30 text-[10px] transition-colors group-hover:text-white/50"
@@ -232,7 +232,7 @@ export default function HistoryPage() {
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                className="flex justify-center py-4"
+                                className="flex justify-center pt-1 pb-3"
                             >
                                 <button
                                     onClick={loadMore}

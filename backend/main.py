@@ -450,7 +450,7 @@ async def chat_stream(request: ChatRequest):
 class InitChatRequest(BaseModel):
     chat_id: str
     user_id: int
-    job_id: str
+    job_id: str | None = None
     title: str = "New Chat"
 
 @app.post("/api/chat/init")

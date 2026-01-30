@@ -123,6 +123,87 @@ const ExplorerLink = ({
     </a>
 )
 
+// Tonviewer icon SVG component
+const TonviewerIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40">
+        <path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path>
+        <path fill="#2E5FDC" d="M20 34V20h-7z"></path>
+        <path fill="#1D2DC6" d="M20 34V20h7z"></path>
+        <path fill="#4576F3" d="M20 20V6l-7 14z"></path>
+        <path fill="#3346F6" d="M20 20V6l7 14z"></path>
+        <path fill="#4486EB" d="M20 34 8 20h6z"></path>
+        <path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path>
+        <path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path>
+        <path fill="#213DD1" d="m20 6 12 14h-6z"></path>
+    </svg>
+)
+
+// Interface for stored address details
+interface AddressDetailsData {
+    type: 'address_details'
+    address: string
+    rawAddress?: string
+    status?: string
+    isWallet?: boolean
+    interfaces?: string[]
+    lastActivity?: string
+    balance?: string
+    isScam?: boolean
+    hasError?: boolean
+}
+
+// Component to render address details message (works for both live and loaded from history)
+const AddressDetailsMessage = ({ data, animate = false }: { data: AddressDetailsData; animate?: boolean }) => {
+    const TextWrapper = animate ? AnimatedText : ({ children }: { children: React.ReactNode }) => <>{children}</>
+
+    return (
+        <div className="flex flex-col gap-4">
+            {!data.hasError && data.rawAddress && (
+                <div className="text-white space-y-2 text-sm bg-black/10 p-4 rounded-xl">
+                    <h3 className="font-bold text-white mb-2 text-base">Address details</h3>
+                    <div className="flex flex-col gap-2">
+                        <span className="text-white"><span className="font-semibold">Raw address:</span> <span className="font-mono text-xs break-all">{data.rawAddress}</span></span>
+                        <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
+                        <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.isWallet ? "yes" : "no"}</span>
+                        <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces?.join(", ") || "none"}</span>
+                        <span className="text-white"><span className="font-semibold">Last activity:</span> {data.lastActivity} UTC</span>
+                        <span className="text-white"><span className="font-semibold">Balance:</span> {data.balance} TON</span>
+                        <span className="text-white"><span className="font-semibold">Is scam:</span> {data.isScam ? "yes" : "no"}</span>
+                    </div>
+                </div>
+            )}
+
+            <p className="text-white">
+                <TextWrapper isAgent={true}>
+                    Got it! I've received the address. You can explore it by yourself on:
+                </TextWrapper>
+            </p>
+            <ExplorerLink
+                href={`https://tonviewer.com/${data.address}`}
+                icon={<TonviewerIcon />}
+            >
+                Tonviewer
+            </ExplorerLink>
+        </div>
+    )
+}
+
+// Helper to parse stored message content and reconstruct JSX if needed
+const parseStoredMessage = (content: string): React.ReactNode => {
+    try {
+        // Try to parse as JSON first
+        if (content.startsWith('{') && content.includes('"type"')) {
+            const parsed = JSON.parse(content)
+            if (parsed.type === 'address_details') {
+                return <AddressDetailsMessage data={parsed} animate={false} />
+            }
+        }
+    } catch {
+        // Not JSON, return as-is (will be rendered as markdown)
+    }
+    return content
+}
+
 // Streaming message component that shows tokens as they arrive
 const StreamingMessage = ({
     content,
@@ -473,7 +554,7 @@ function ChatContent() {
                     const loadedMessages = historyResponse.data.messages.map((msg: any) => ({
                         id: msg.message_id || Math.random().toString(36),
                         role: msg.role,
-                        content: msg.content,
+                        content: parseStoredMessage(msg.content),
                         timestamp: new Date(msg.created_at),
                         traceId: msg.trace_id
                     }))
@@ -706,21 +787,14 @@ function ChatContent() {
             if (response.data.error) {
                 // Fallback if error
                 addMessage("agent", (
-                    <div className="flex flex-col gap-4">
-                        <p className="text-white">
-                            <AnimatedText isAgent={true}>
-                                Got it! I've received the address. You can explore it by yourself on:
-                            </AnimatedText>
-                        </p>
-                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
-                            <ExplorerLink
-                                href={`https://tonviewer.com/${address}`}
-                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
-                            >
-                                Tonviewer
-                            </ExplorerLink>
-                        </motion.div>
-                    </div>
+                    <AddressDetailsMessage
+                        data={{
+                            type: 'address_details',
+                            address: address,
+                            hasError: true
+                        }}
+                        animate={true}
+                    />
                 ), false, undefined, true)
             } else {
                 const data = response.data
@@ -728,36 +802,21 @@ function ChatContent() {
                 const balance = (data.balance / 1000000000).toFixed(2)
 
                 addMessage("agent", (
-                    <div className="flex flex-col gap-4">
-                        <div className="text-white space-y-2 text-sm bg-black/10 p-4 rounded-xl">
-                            <h3 className="font-bold text-white mb-2 text-base">Address details</h3>
-                            <div className="flex flex-col gap-2">
-                                <span className="text-white"><span className="font-semibold">Raw address:</span> <span className="font-mono text-xs break-all">{data.address}</span></span>
-                                <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
-                                <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.is_wallet ? "yes" : "no"}</span>
-                                <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces ? data.interfaces.join(", ") : "none"}</span>
-                                <span className="text-white"><span className="font-semibold">Last activity:</span> {lastActivity} UTC</span>
-
-                                <span className="text-white"><span className="font-semibold">Balance:</span> {balance} TON</span>
-
-                                <span className="text-white"><span className="font-semibold">Is scam:</span> {data.is_scam ? "yes" : "no"}</span>
-                            </div>
-                        </div>
-
-                        <p className="text-white">
-                            <AnimatedText isAgent={true}>
-                                Got it! I've received the address. You can explore it by yourself on:
-                            </AnimatedText>
-                        </p>
-                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
-                            <ExplorerLink
-                                href={`https://tonviewer.com/${address}`}
-                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
-                            >
-                                Tonviewer
-                            </ExplorerLink>
-                        </motion.div>
-                    </div>
+                    <AddressDetailsMessage
+                        data={{
+                            type: 'address_details',
+                            address: address,
+                            rawAddress: data.address,
+                            status: data.status,
+                            isWallet: data.is_wallet,
+                            interfaces: data.interfaces,
+                            lastActivity: lastActivity,
+                            balance: balance,
+                            isScam: data.is_scam,
+                            hasError: false
+                        }}
+                        animate={true}
+                    />
                 ), false, undefined, true)
             }
 
@@ -778,10 +837,19 @@ function ChatContent() {
                     const lastActivity = data.last_activity ? new Date(data.last_activity * 1000).toUTCString().replace(' GMT', '') : 'Unknown'
                     const balance = data.balance ? (data.balance / 1000000000).toFixed(2) : '0.00'
 
-                    // Build markdown for storage
-                    const addressDetailsMarkdown = data.error
-                        ? `Got it! I've received the address. You can explore it on [Tonviewer](https://tonviewer.com/${address}).`
-                        : `### Address details\n\n**Raw address:** \`${data.address}\`\n**Status:** ${data.status}\n**Is wallet:** ${data.is_wallet ? 'yes' : 'no'}\n**Interfaces:** ${data.interfaces ? data.interfaces.join(', ') : 'none'}\n**Last activity:** ${lastActivity} UTC\n**Balance:** ${balance} TON\n**Is scam:** ${data.is_scam ? 'yes' : 'no'}\n\nGot it! I've received the address. You can explore it on [Tonviewer](https://tonviewer.com/${address}).`
+                    // Build JSON for storage (can be reconstructed to JSX)
+                    const addressDetailsJson: AddressDetailsData = {
+                        type: 'address_details',
+                        address: address,
+                        rawAddress: data.address,
+                        status: data.status,
+                        isWallet: data.is_wallet,
+                        interfaces: data.interfaces,
+                        lastActivity: lastActivity,
+                        balance: balance,
+                        isScam: data.is_scam,
+                        hasError: !!data.error
+                    }
 
                     // 1. Init chat
                     await axios.post(`${apiUrl}/api/chat/init`, {
@@ -796,10 +864,10 @@ function ChatContent() {
                         content: `Address: ${address}`
                     })
 
-                    // 3. Save agent response
+                    // 3. Save agent response as JSON
                     await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                         role: "agent",
-                        content: addressDetailsMarkdown
+                        content: JSON.stringify(addressDetailsJson)
                     })
                 } catch (e) {
                     console.error("Failed to save address details to history:", e)
@@ -810,21 +878,14 @@ function ChatContent() {
             setMessages(prev => prev.filter(m => m.id !== loadingId))
             // Fallback (same as error above)
             addMessage("agent", (
-                <div className="flex flex-col gap-4">
-                    <p className="text-white">
-                        <AnimatedText isAgent={true}>
-                            Got it! I've received the address. You can explore it by yourself on:
-                        </AnimatedText>
-                    </p>
-                    <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
-                        <ExplorerLink
-                            href={`https://tonviewer.com/${address}`}
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40"><path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path><path fill="#2E5FDC" d="M20 34V20h-7z"></path><path fill="#1D2DC6" d="M20 34V20h7z"></path><path fill="#4576F3" d="M20 20V6l-7 14z"></path><path fill="#3346F6" d="M20 20V6l7 14z"></path><path fill="#4486EB" d="M20 34 8 20h6z"></path><path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path><path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path><path fill="#213DD1" d="m20 6 12 14h-6z"></path></svg>}
-                        >
-                            Tonviewer
-                        </ExplorerLink>
-                    </motion.div>
-                </div>
+                <AddressDetailsMessage
+                    data={{
+                        type: 'address_details',
+                        address: address,
+                        hasError: true
+                    }}
+                    animate={true}
+                />
             ), false, undefined, true)
         }
 
