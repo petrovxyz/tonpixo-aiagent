@@ -189,19 +189,24 @@ const AddressDetailsMessage = ({ data, animate = false }: { data: AddressDetails
 }
 
 // Helper to parse stored message content and reconstruct JSX if needed
-const parseStoredMessage = (content: string): React.ReactNode => {
+// Returns both the content and whether it's a system message
+const parseStoredMessage = (content: string): { content: React.ReactNode; isSystemMessage: boolean } => {
     try {
         // Try to parse as JSON first
         if (content.startsWith('{') && content.includes('"type"')) {
             const parsed = JSON.parse(content)
             if (parsed.type === 'address_details') {
-                return <AddressDetailsMessage data={parsed} animate={false} />
+                // Address details messages are system messages (no like/dislike/copy)
+                return {
+                    content: <AddressDetailsMessage data={parsed} animate={false} />,
+                    isSystemMessage: true
+                }
             }
         }
     } catch {
         // Not JSON, return as-is (will be rendered as markdown)
     }
-    return content
+    return { content, isSystemMessage: false }
 }
 
 // Streaming message component that shows tokens as they arrive
@@ -551,13 +556,17 @@ function ChatContent() {
                 }
 
                 if (historyResponse.data.messages) {
-                    const loadedMessages = historyResponse.data.messages.map((msg: any) => ({
-                        id: msg.message_id || Math.random().toString(36),
-                        role: msg.role,
-                        content: parseStoredMessage(msg.content),
-                        timestamp: new Date(msg.created_at),
-                        traceId: msg.trace_id
-                    }))
+                    const loadedMessages = historyResponse.data.messages.map((msg: any) => {
+                        const parsed = parseStoredMessage(msg.content)
+                        return {
+                            id: msg.message_id || Math.random().toString(36),
+                            role: msg.role,
+                            content: parsed.content,
+                            timestamp: new Date(msg.created_at),
+                            traceId: msg.trace_id,
+                            isSystemMessage: parsed.isSystemMessage
+                        }
+                    })
                     console.log(`[CHAT] Loaded ${loadedMessages.length} messages from history`)
                     setMessages(loadedMessages)
                 }

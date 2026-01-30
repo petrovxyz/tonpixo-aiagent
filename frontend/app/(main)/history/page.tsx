@@ -157,7 +157,7 @@ export default function HistoryPage() {
                             <FontAwesomeIcon icon={faMessage} className="text-white/60 text-2xl" />
                         </div>
                         <p className="font-semibold text-lg text-white mb-1">No history yet</p>
-                        <p className="text-white/40 text-sm mb-6">Your conversations will appear here</p>
+                        <p className="text-white/50 font-medium text-sm mb-6">Your conversations will appear here</p>
                         <button
                             onClick={() => router.push('/explore')}
                             className="bg-gradient-to-r from-[#0098EA] to-[#0088CC] text-white rounded-full py-2.5 px-8 font-medium text-sm shadow-lg shadow-[#0098EA]/20 hover:shadow-[#0098EA]/30 transition-all active:scale-95 transform duration-200 cursor-pointer"
@@ -237,7 +237,7 @@ export default function HistoryPage() {
                                 <button
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
-                                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 cursor-pointer px-6 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isLoadingMore ? (
                                         <>
