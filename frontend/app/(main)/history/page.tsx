@@ -134,7 +134,7 @@ export default function HistoryPage() {
 
             {/* Chat List Container - max height limits, scrollable when needed */}
             <div
-                className="flex-1 overflow-y-auto rounded-2xl mb-10"
+                className="flex-1 overflow-y-auto rounded-2xl pb-20"
                 style={{
                     maxHeight: 'calc(95vh - 260px)', // Account for header, top bar, and bottom nav
                     minHeight: '200px'
