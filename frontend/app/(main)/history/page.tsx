@@ -160,7 +160,7 @@ export default function HistoryPage() {
                         <p className="text-white/50 font-medium text-sm mb-6">Your conversations will appear here</p>
                         <button
                             onClick={() => router.push('/explore')}
-                            className="bg-gradient-to-r bg-[#0098EA] hover:bg-[#0088CC] text-white rounded-full py-3 w-[150px] font-medium text-sm shadow-lg transition-all active:scale-95 transform duration-200 cursor-pointer"
+                            className="bg-[#0098EA] hover:bg-[#0088CC] text-white rounded-full py-3 w-[150px] font-medium text-sm shadow-lg transition-all active:scale-95 transform duration-200 cursor-pointer"
                         >
                             Start exploring
                         </button>
@@ -237,7 +237,7 @@ export default function HistoryPage() {
                                 <button
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
-                                    className="flex items-center gap-2 cursor-pointer py-3 w-[150px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 active:scale-95 transform duration-200 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="items-center gap-2 cursor-pointer py-3 w-[150px] rounded-full bg-[#0098EA] hover:bg-[#0088CC] shadow-lg text-white active:scale-95 transform duration-200 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isLoadingMore ? (
                                         <>
