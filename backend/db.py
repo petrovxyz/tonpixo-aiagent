@@ -126,6 +126,25 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
         print(f"Error fetching chats for user {user_id}: {e}")
         return [], None
 
+def get_user_chats_count(user_id: int):
+    """
+    Gets the total count of chats for a user.
+    """
+    if not CHATS_TABLE_NAME:
+        return 0
+
+    try:
+        table = get_chats_table()
+        response = table.query(
+            IndexName='UserChatsIndex',
+            KeyConditionExpression=Key('user_id').eq(str(user_id)),
+            Select='COUNT'
+        )
+        return response.get('Count', 0)
+    except ClientError as e:
+        print(f"Error counting chats for user {user_id}: {e}")
+        return 0
+
 def get_chat_messages(chat_id: str):
     """
     Retrieves all messages for a specific chat.

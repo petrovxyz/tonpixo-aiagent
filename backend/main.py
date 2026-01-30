@@ -259,6 +259,7 @@ async def get_history(user_id: int, limit: int = 10, last_key: str = None):
     """Get chat history for a user with pagination."""
     import json
     import base64
+    from db import get_user_chats_count
     
     # Decode last_key if provided (base64 encoded JSON)
     decoded_last_key = None
@@ -270,12 +271,17 @@ async def get_history(user_id: int, limit: int = 10, last_key: str = None):
     
     chats, next_key = get_user_chats(user_id, limit, decoded_last_key)
     
+    # Get total count (only on first page load to avoid extra queries)
+    total_count = None
+    if not last_key:
+        total_count = get_user_chats_count(user_id)
+    
     # Encode next_key for client (base64 encoded JSON)
     encoded_next_key = None
     if next_key:
         encoded_next_key = base64.b64encode(json.dumps(next_key).encode('utf-8')).decode('utf-8')
     
-    return {"chats": chats, "next_key": encoded_next_key}
+    return {"chats": chats, "next_key": encoded_next_key, "total_count": total_count}
 
 @app.get("/api/chat/{chat_id}/history")
 async def get_chat_history(chat_id: str, user_id: int):

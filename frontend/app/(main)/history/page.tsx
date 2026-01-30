@@ -21,8 +21,8 @@ export default function HistoryPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [nextKey, setNextKey] = useState<string | null>(null)
+    const [totalCount, setTotalCount] = useState<number | null>(null)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
-    const scrollContainerRef = useRef<HTMLDivElement>(null)
 
     const fetchHistory = useCallback(async (lastKey?: string | null) => {
         if (!user?.id) return
@@ -49,6 +49,11 @@ export default function HistoryPage() {
             }
 
             setNextKey(response.data.next_key || null)
+
+            // Only set total count on initial load
+            if (response.data.total_count !== null && response.data.total_count !== undefined) {
+                setTotalCount(response.data.total_count)
+            }
         } catch (error) {
             console.error("Failed to load history:", error)
         }
@@ -109,29 +114,30 @@ export default function HistoryPage() {
     }
 
     return (
-        <div className="relative w-full flex flex-col h-full max-w-2xl mx-auto overflow-hidden">
+        <div className="relative w-full flex flex-col max-w-2xl mx-auto px-6 pb-6">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-3 px-6 py-4 shrink-0"
+                className="flex items-center gap-3 py-2 mb-4"
             >
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/15 to-white/5 flex items-center justify-center backdrop-blur-sm border border-white/10">
                     <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">History</h1>
-                    <p className="text-white/40 text-xs">{chats.length} conversation{chats.length !== 1 ? 's' : ''}</p>
+                    <p className="text-white/40 text-xs">
+                        {totalCount !== null ? totalCount : chats.length} conversation{(totalCount !== null ? totalCount : chats.length) !== 1 ? 's' : ''}
+                    </p>
                 </div>
             </motion.div>
 
-            {/* Scrollable Container */}
+            {/* Chat List Container - max height limits, scrollable when needed */}
             <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-6 pb-24"
+                className="flex-1 overflow-y-auto rounded-2xl"
                 style={{
-                    maskImage: 'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 60px), transparent 100%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 60px), transparent 100%)'
+                    maxHeight: 'calc(100vh - 260px)', // Account for header, top bar, and bottom nav
+                    minHeight: '200px'
                 }}
             >
                 {isLoading ? (
@@ -160,7 +166,7 @@ export default function HistoryPage() {
                         </button>
                     </motion.div>
                 ) : (
-                    <div className="flex flex-col gap-2 pt-2">
+                    <div className="flex flex-col gap-2">
                         {chats.map((chat, index) => (
                             <motion.div
                                 key={chat.chat_id}
