@@ -126,7 +126,7 @@ export default function HistoryPage() {
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">History</h1>
-                    <p className="text-white/50 text-xs">
+                    <p className="text-white/60 text-xs">
                         {totalCount !== null ? totalCount : chats.length} conversation{(totalCount !== null ? totalCount : chats.length) !== 1 ? 's' : ''}
                     </p>
                 </div>
@@ -181,7 +181,7 @@ export default function HistoryPage() {
                                             router.push(`/chat?chat_id=${chat.chat_id}`)
                                         }, 150)
                                     }}
-                                    className="w-full relative overflow-hidden bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] rounded-xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
+                                    className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
                                 >
                                     <AnimatePresence>
                                         {ripples.map((ripple) => (
@@ -237,7 +237,7 @@ export default function HistoryPage() {
                                 <button
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
-                                    className="flex items-center gap-2 cursor-pointer px-6 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-2 cursor-pointer px-6 py-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white/60 hover:text-white/80 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isLoadingMore ? (
                                         <>
