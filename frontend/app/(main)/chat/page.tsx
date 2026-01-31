@@ -454,16 +454,41 @@ function ChatContent() {
     const streamingMsgIdRef = useRef<string | null>(null)
     const userRef = useRef(user)
     const activeSessionRef = useRef(false) // Track if messages were added during this session
-    const chatIdRef = useRef<string | null>(null) // Track current chatId for closures
+    const chatIdRef = useRef<string | null>(chatIdParam) // Initialize from URL param immediately
+    const prevChatIdParamRef = useRef<string | null>(chatIdParam) // Track URL parameter changes
+    const historyLoadedRef = useRef<string | null>(null) // Track if history has been loaded
 
     useEffect(() => {
         userRef.current = user
     }, [user])
 
-    // Keep chatIdRef in sync with chatId state
+    // Keep chatIdRef in sync with chatId state and URL parameter
     useEffect(() => {
         chatIdRef.current = chatId
     }, [chatId])
+
+    // CRITICAL: Sync chatIdRef immediately when URL parameter changes
+    // This must happen synchronously before any other effects that might call ensureChatId
+    if (chatIdParam && chatIdParam !== prevChatIdParamRef.current) {
+        console.log(`[CHAT-ID] URL param changed from ${prevChatIdParamRef.current} to ${chatIdParam}, syncing ref immediately`)
+        chatIdRef.current = chatIdParam
+        prevChatIdParamRef.current = chatIdParam
+        // Reset all session tracking refs when navigating to a different chat
+        activeSessionRef.current = false
+        hasStartedRef.current = false
+        // Reset historyLoadedRef if navigating to a DIFFERENT chat (not the same one)
+        if (historyLoadedRef.current !== chatIdParam) {
+            historyLoadedRef.current = null
+        }
+    } else if (!chatIdParam && prevChatIdParamRef.current) {
+        // Navigating away from an existing chat to new chat
+        console.log(`[CHAT-ID] URL param cleared, resetting for new chat`)
+        prevChatIdParamRef.current = null
+        chatIdRef.current = null // Clear ref so new ID will be created
+        activeSessionRef.current = false
+        hasStartedRef.current = false
+        historyLoadedRef.current = null
+    }
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -555,8 +580,6 @@ function ChatContent() {
         }
     }
 
-    // Ref to track if history has been loaded to prevent duplicate loads
-    const historyLoadedRef = useRef<string | null>(null)
 
     // Load Chat History
     useEffect(() => {
@@ -1401,15 +1424,10 @@ function ChatContent() {
 
     useEffect(() => {
         // Skip if we're loading an existing chat from history
-        // The loadHistory effect will handle setting up messages
+        // The loadHistory effect will handle setting up messages, and
+        // chatIdRef is now synced synchronously at the top of the component
         if (chatIdParam) {
             hasStartedRef.current = true
-            // CRITICAL: Sync the ref to prevent ensureChatId from creating a new ID
-            if (!chatIdRef.current) {
-                chatIdRef.current = chatIdParam
-                setChatId(chatIdParam)
-                console.log(`[CHAT] Synced chatIdRef from URL param: ${chatIdParam}`)
-            }
             return
         }
 
