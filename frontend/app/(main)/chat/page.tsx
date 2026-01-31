@@ -14,6 +14,9 @@ import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 
+// Global lock to prevent duplicate address processing across component remounts
+let globalProcessingAddress: string | null = null
+
 // Message Type Definition
 interface Message {
     id: string
@@ -457,7 +460,6 @@ function ChatContent() {
     const chatIdRef = useRef<string | null>(chatIdParam) // Initialize from URL param immediately
     const prevChatIdParamRef = useRef<string | null>(chatIdParam) // Track URL parameter changes
     const historyLoadedRef = useRef<string | null>(null) // Track if history has been loaded
-    const isProcessingAddressRef = useRef(false) // Prevent duplicate processing of address detection
 
     useEffect(() => {
         userRef.current = user
@@ -888,8 +890,8 @@ function ChatContent() {
 
     // Handle address detection and show acknowledgment
     const handleAddressReceived = async (address: string) => {
-        if (isProcessingAddressRef.current) return
-        isProcessingAddressRef.current = true
+        if (globalProcessingAddress === address) return
+        globalProcessingAddress = address
 
         setPendingAddress(address)
         setCurrentAddress(address)
@@ -1017,9 +1019,9 @@ function ChatContent() {
         // After a short delay, show scan type selection
         setTimeout(() => {
             showScanTypeSelection(address)
+            // Reset global lock after standard delay to allow reprocessing if needed later
+            globalProcessingAddress = null
         }, 500)
-
-        isProcessingAddressRef.current = false
     }
 
     // Show scan type selection buttons
