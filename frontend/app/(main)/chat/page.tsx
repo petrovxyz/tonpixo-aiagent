@@ -654,13 +654,10 @@ function ChatContent() {
                 setIsLoading(false)
                 setJobId(jobId)
 
-                // Initialize chat in backend explicitly so history works immediately
-                const currentChatId = chatIdRef.current || crypto.randomUUID()
-                if (!chatIdRef.current) {
-                    chatIdRef.current = currentChatId // Update ref immediately
-                }
+                // Only save to backend if chat was already initialized (from handleAddressReceived)
+                const currentChatId = chatIdRef.current
 
-                if (userRef.current) {
+                if (userRef.current && currentChatId) {
                     try {
                         const scanLabels: Record<string, string> = {
                             'transactions': 'Transactions',
@@ -697,11 +694,6 @@ function ChatContent() {
                     }
                 }
 
-                // Update state and URL
-                setChatId(currentChatId)
-                const newUrl = new URL(window.location.href)
-                newUrl.searchParams.set('chat_id', currentChatId)
-                window.history.pushState({}, '', newUrl.toString())
 
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
