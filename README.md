@@ -35,6 +35,36 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 
 ---
 
+## Example flow
+
+### User query
+
+User: *"How much TON did I send to Binance last month?"*
+
+### Step 1: intent analysis & schema lookup (Agent Lambda)
+The Agent (Claude Haiku 4.5) receives the text. It retrieves the database schema from the system prompt and identifies the necessary filters.
+
+### Step 2: SQL generation
+The Agent generates a precise Presto/Trino SQL query. It does not fetch rows to Python; it pushes the compute to the database engine.
+
+### Step 3: serverless execution (Amazon Athena)
+1. The query is sent to Athena.
+2. Using Partition Projection, Athena instantly locates the specific S3 folder: `s3://.../data/transactions/job_id=user_123/`.
+3. It scans only the relevant Parquet files (e.g., 50KB of data) instead of the whole blockchain history.
+4. Aggregation is performed on the AWS side.
+
+### Step 4: result processing
+Athena returns a lightweight result to the Lambda function.
+
+### Step 5: final response
+The Agent interprets the number and generates a natural language response (or a JSON payload for the UI).
+
+- Zero RAM load: the Python Lambda never loaded the transaction history. It only handled the final number.
+- Cost effective: we scanned only one user's data instead of querying a full database.
+- Safety: the SQL generation layer is sandboxed, and the IAM role limits Athena to read-only access.
+
+---
+
 ## Project structure
 
 ```bash
@@ -172,3 +202,14 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
     ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. Note that to test Telegram-specific features, you specifically need to open the app via the Telegram client.
+
+---
+
+## License
+
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
+
+* **Permitted:** personal use, educational use, testing, and contribution.
+* **Prohibited:** any commercial use (selling the code, using it for a paid service, integration into a commercial product) without prior permission.
+
+For commercial inquiries, please contact the author: [Telegram](https://t.me/petrovxyz).
