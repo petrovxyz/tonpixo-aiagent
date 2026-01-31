@@ -12,11 +12,14 @@ WORKDIR /var/task
 RUN pip install awslambdaric
 
 # Copy requirements and install dependencies
-COPY requirements.txt ./
+COPY worker/requirements.txt ./
 RUN pip install -r requirements.txt
 
+# Copy labels
+COPY labels/ ./labels/
+
 # Copy function code
-COPY *.py ./
+COPY worker/*.py ./
 
 # Set the CMD to your handler
 CMD [ "worker.lambda_handler" ]

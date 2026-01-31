@@ -186,8 +186,8 @@ Resources:
             Queue: !GetAtt JobsQueue.Arn
             BatchSize: 1
     Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: ./worker
+      Dockerfile: worker/Dockerfile
+      DockerContext: .
       DockerTag: latest
 
   DataBucket:
