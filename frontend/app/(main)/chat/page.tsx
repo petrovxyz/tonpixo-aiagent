@@ -5,11 +5,12 @@ import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faStar as faStarSolid } from "@fortawesome/free-solid-svg-icons"
+import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faStar as faStarSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
 import { faStar as faStarOutline } from "@fortawesome/free-regular-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
+import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
@@ -18,6 +19,13 @@ import { useToast } from "@/components/Toast"
 let globalProcessingAddress: string | null = null
 let globalPendingChatId: string | null = null
 let globalPendingMessages: Message[] | null = null
+
+const BEST_PRACTICES_ITEM: QAItem = {
+    id: 'best-practices',
+    question: "Best practices",
+    answer: "The more specific your prompt, the better the result. Always define clear timeframes, explicitly name the assets you are tracking, and state your desired format. Avoid vague questions. Instead, combine dates, actions, and filters to get desired insights.",
+    image: "/images/banner_best_practices.webp"
+}
 
 // Message Type Definition
 interface Message {
@@ -450,6 +458,7 @@ function ChatContent() {
     const [isFavourite, setIsFavourite] = useState(false)
     const [currentAddress, setCurrentAddress] = useState<string | null>(null)
     const [awaitingTransactionLimit, setAwaitingTransactionLimit] = useState(false)
+    const [activeQA, setActiveQA] = useState<QAItem | null>(null)
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1755,6 +1764,17 @@ function ChatContent() {
                                 ))}
                             </AnimatePresence>
 
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveQA(BEST_PRACTICES_ITEM);
+                                }}
+                                className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-all cursor-pointer active:scale-95 z-10 mr-1"
+                                title="Best Practices"
+                            >
+                                <FontAwesomeIcon icon={faQuestion} className="text-sm" />
+                            </button>
+
                             <input
                                 ref={inputRef}
                                 type="text"
@@ -1763,7 +1783,7 @@ function ChatContent() {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Ask something..."
                                 disabled={isLoading && messages.some(m => m.content === "collecting")}
-                                className="flex-1 bg-transparent border-none outline-none px-5 py-3.5 text-white placeholder:text-white/40 text-base md:text-lg min-w-0 font-medium z-10"
+                                className="flex-1 bg-transparent border-none outline-none px-3 py-3 text-white placeholder:text-white/40 text-base md:text-lg min-w-0 font-medium z-10"
                                 autoComplete="off"
                             />
                             <button
@@ -1781,6 +1801,16 @@ function ChatContent() {
                 </div>
                 <span className="flex justify-center text-white/50 text-xs font-medium mb-6">Tonpixo can make mistakes. Verify important information.</span>
             </div>
+
+            {/* Q&A Bottom Sheet Modal */}
+            <AnimatePresence>
+                {activeQA && (
+                    <QABottomSheet
+                        item={activeQA}
+                        onClose={() => setActiveQA(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }

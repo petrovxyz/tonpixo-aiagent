@@ -10,7 +10,7 @@ export default function SettingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-4xl font-bold text-white mb-4"
             >
-                Settings
+                In development
             </motion.h1>
             <motion.p
                 initial={{ opacity: 0, y: 20 }}
@@ -18,7 +18,7 @@ export default function SettingsPage() {
                 transition={{ delay: 0.1 }}
                 className="text-white/70 text-lg"
             >
-                Configure your preferences.
+                Settings are not available yet
             </motion.p>
         </div>
     )

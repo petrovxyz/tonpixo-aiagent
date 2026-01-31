@@ -14,14 +14,20 @@ const QA_ITEMS: QAItem[] = [
   {
     id: 'what-is-tonpixo',
     question: "What is Tonpixo?",
-    answer: 'Tonpixo is an AI-powered agent that turns TON wallet activity into a natural conversation. Simply interact with data by asking direct questions. Its your personal financial assistant that analyzes blockchain history and provides clear, human-readable answers.',
+    answer: 'Tonpixo is an AI-powered agent that turns TON address activity into a natural conversation. Simply interact with data by asking direct questions. Its your personal financial assistant that analyzes blockchain and provides clear, human-readable answers.',
     image: "/images/banner_what_is_tonpixo.webp"
   },
   {
     id: 'how-tonpixo-works',
     question: "How Tonpixo works?",
-    answer: "The process is seamless and completely safe. Tonpixo scans the entire transaction history to build a knowledge base for the wallet. Once the data is processed, just start asking questions, and Tonpixo will fetch the specific details, presenting them as easy-to-understand insights.",
+    answer: "The process is seamless and completely safe. Tonpixo scans the blockchain data to build a knowledge base for the address. Once the data is processed, just start asking questions, and Tonpixo will fetch the specific details, presenting them as easy-to-understand insights.",
     image: "/images/banner_how_it_works.webp"
+  },
+  {
+    id: 'best-practices',
+    question: "Best practices",
+    answer: "The more specific your prompt, the better the result. Always define clear timeframes, explicitly name the assets you are tracking, and state your desired format. Avoid vague questions. Instead, combine dates, actions, and filters to get desired insights.",
+    image: "/images/banner_best_practices.webp"
   }
 ]
 
