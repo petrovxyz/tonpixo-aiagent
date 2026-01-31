@@ -462,6 +462,7 @@ function ChatContent() {
     const chatIdRef = useRef<string | null>(chatIdParam) // Initialize from URL param immediately
     const prevChatIdParamRef = useRef<string | null>(chatIdParam) // Track URL parameter changes
     const historyLoadedRef = useRef<string | null>(null) // Track if history has been loaded
+    const activeJobIdRef = useRef<string | null>(null) // Ref to track the currently active job for cleanup
 
     useEffect(() => {
         userRef.current = user
@@ -511,6 +512,14 @@ function ChatContent() {
         activeSessionRef.current = false
         hasStartedRef.current = false
         historyLoadedRef.current = null
+
+        // Reset Chat State
+        setJobId(null)
+        activeJobIdRef.current = null
+        setMessages([])
+        setIsFavourite(false)
+        setPendingAddress(null)
+        setCurrentAddress(null)
     }
 
     const scrollToBottom = () => {
@@ -521,8 +530,7 @@ function ChatContent() {
         scrollToBottom()
     }, [messages, streamingContent])
 
-    // Ref to track the currently active job for cleanup
-    const activeJobIdRef = useRef<string | null>(null)
+
 
     // Cancel job function
     const cancelJob = async (jobIdToCancel: string) => {
@@ -1009,12 +1017,11 @@ function ChatContent() {
 
                 console.log(`[CHAT] Constructing globalPendingMessages with 2 items`)
                 globalPendingMessages = [
-                    // We know the first message is the user search "Search: <address>"
-                    // We reconstruct it here because captured 'messages' might be empty in this closure
+                    ...messages.filter(m => m.id !== loadingId), // Remove loading message from history
                     {
                         id: Date.now().toString(),
                         role: "user" as const,
-                        content: `Search: ${address}`,
+                        content: `Address: ${address}`,
                         timestamp: new Date()
                     },
                     resultMessage
@@ -1251,6 +1258,9 @@ function ChatContent() {
         // Add a streaming message placeholder with thinking state
         const streamingMsgId = "streaming-" + Date.now()
         streamingMsgIdRef.current = streamingMsgId
+
+        // Mark session as active to prevent history overwrite if URL updates
+        activeSessionRef.current = true
 
         setMessages(prev => [...prev.filter(m => !m.isStreaming), {
             id: streamingMsgId,
