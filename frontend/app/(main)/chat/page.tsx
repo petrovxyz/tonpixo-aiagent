@@ -509,6 +509,8 @@ function ChatContent() {
             // Prevent duplicate loading for the same chat
             if (historyLoadedRef.current === chatIdParam) {
                 console.log(`[CHAT] History already loaded for chat ${chatIdParam}, skipping`)
+                // Ensure ref is in sync even when skipping
+                if (!chatIdRef.current) chatIdRef.current = chatIdParam
                 return
             }
 
@@ -516,6 +518,11 @@ function ChatContent() {
             if (activeSessionRef.current) {
                 console.log(`[CHAT] Skipping history load - active session in progress`)
                 historyLoadedRef.current = chatIdParam
+                // Even when skipping, ensure ref is in sync with URL param
+                if (!chatIdRef.current) {
+                    chatIdRef.current = chatIdParam
+                    console.log(`[CHAT] Synced chatIdRef to URL param: ${chatIdParam}`)
+                }
                 return
             }
 
@@ -525,6 +532,7 @@ function ChatContent() {
             console.log(`[CHAT] Loading history for chat ${chatIdParam}`)
             historyLoadedRef.current = chatIdParam
             setChatId(chatIdParam)
+            chatIdRef.current = chatIdParam // CRITICAL: Also set the ref to prevent new ID creation!
             setIsLoading(true)
 
             try {
@@ -594,8 +602,13 @@ function ChatContent() {
     // Generate Chat ID if needed when starting interaction
     const ensureChatId = () => {
         // Use ref to get the latest value, avoiding stale closures
-        if (chatIdRef.current) return chatIdRef.current
+        if (chatIdRef.current) {
+            console.log(`[CHAT-ID] Returning existing chatId: ${chatIdRef.current}`)
+            return chatIdRef.current
+        }
         const newId = crypto.randomUUID()
+        console.log(`[CHAT-ID] Creating NEW chatId: ${newId}`)
+        console.trace('[CHAT-ID] Stack trace for new ID creation')
         setChatId(newId)
         chatIdRef.current = newId // Update ref immediately
         // Update URL without reload
@@ -1244,6 +1257,12 @@ function ChatContent() {
         // The loadHistory effect will handle setting up messages
         if (chatIdParam) {
             hasStartedRef.current = true
+            // CRITICAL: Sync the ref to prevent ensureChatId from creating a new ID
+            if (!chatIdRef.current) {
+                chatIdRef.current = chatIdParam
+                setChatId(chatIdParam)
+                console.log(`[CHAT] Synced chatIdRef from URL param: ${chatIdParam}`)
+            }
             return
         }
 
