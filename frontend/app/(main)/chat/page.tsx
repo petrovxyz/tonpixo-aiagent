@@ -604,10 +604,11 @@ function ChatContent() {
                 return
             }
 
-            // If we have an addressParam, we're creating a NEW chat from explore page
-            // Don't try to load history - handleAddressReceived will create and populate the chat
-            if (addressParam) {
-                console.log(`[CHAT] Skipping history load - creating new chat from address`)
+            // If we have an addressParam AND we have pending global messages for this chat,
+            // we skip loading history to use the fresh in-memory state.
+            // Otherwise (e.g. refresh, or old chat with address param), we should load history.
+            if (addressParam && globalPendingChatId === chatIdParam) {
+                console.log(`[CHAT] Skipping history load - using pending in-memory state`)
                 historyLoadedRef.current = chatIdParam
                 chatIdRef.current = chatIdParam
                 return
