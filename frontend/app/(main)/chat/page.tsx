@@ -604,6 +604,15 @@ function ChatContent() {
                 return
             }
 
+            // If we have an addressParam, we're creating a NEW chat from explore page
+            // Don't try to load history - handleAddressReceived will create and populate the chat
+            if (addressParam) {
+                console.log(`[CHAT] Skipping history load - creating new chat from address`)
+                historyLoadedRef.current = chatIdParam
+                chatIdRef.current = chatIdParam
+                return
+            }
+
             // Prevent duplicate loading for the same chat
             if (historyLoadedRef.current === chatIdParam) {
                 console.log(`[CHAT] History already loaded for chat ${chatIdParam}, skipping`)
