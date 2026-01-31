@@ -8,7 +8,7 @@ export default function SettingsPage() {
             <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl font-bold text-white mb-4"
+                className="text-2xl font-bold text-white mb-4"
             >
                 In development
             </motion.h1>

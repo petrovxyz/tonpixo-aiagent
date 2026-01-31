@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faStar, faSpinner, faChevronRight, faTrash } from "@fortawesome/free-solid-svg-icons"
+import { faStar, faSpinner, faChevronRight, faTrash, faCopy } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
@@ -74,6 +74,12 @@ export default function FavsPage() {
             console.error("Failed to remove favourite:", error)
             showToast("Failed to remove favourite", "error")
         }
+    }
+
+    const handleCopyAddress = (address: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        navigator.clipboard.writeText(address)
+        showToast("Address copied successfully", "success")
     }
 
     const formatDate = (dateString: string) => {
@@ -216,6 +222,12 @@ export default function FavsPage() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => handleCopyAddress(fav.address, e)}
+                                                className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center transition-all hover:bg-white/20 text-white cursor-pointer"
+                                            >
+                                                <FontAwesomeIcon icon={faCopy} className="text-[12px]" />
+                                            </button>
                                             <button
                                                 onClick={(e) => handleRemoveFavourite(fav.address, e)}
                                                 className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center transition-all hover:bg-red-500/20 hover:text-red-400 text-white cursor-pointer"
