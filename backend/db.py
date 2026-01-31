@@ -17,7 +17,7 @@ def get_chats_table():
 def get_messages_table():
     return dynamodb.Table(MESSAGES_TABLE_NAME)
 
-def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str = None):
+def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str = None, address: str = None):
     """
     Creates or updates a chat session.
     """
@@ -39,6 +39,8 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
         
         if job_id:
             item['job_id'] = job_id
+        if address:
+            item['address'] = address
             
         # Use update_item to only set created_at if not exists? 
         # For simplicity, let's assume save_chat is called on creation. 
@@ -56,6 +58,9 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
         if job_id:
             update_expr += ", job_id = :j"
             expr_values[':j'] = job_id
+        if address:
+            update_expr += ", address = :a"
+            expr_values[':a'] = address
 
         table.update_item(
              Key={'chat_id': chat_id},

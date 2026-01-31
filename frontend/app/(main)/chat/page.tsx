@@ -641,7 +641,7 @@ function ChatContent() {
     }
 
     // Existing Polling Logic
-    const pollStatus = async (jobId: string, scanType: string) => {
+    const pollStatus = async (jobId: string, scanType: string, targetAddress: string) => {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
             const response = await axios.get(`${apiUrl}/api/status/${jobId}`)
@@ -649,7 +649,7 @@ function ChatContent() {
 
             if (data.status === "processing" || data.status === "queued") {
                 setCount(data.count || 0)
-                setTimeout(() => pollStatus(jobId, scanType), 1000)
+                setTimeout(() => pollStatus(jobId, scanType, targetAddress), 1000)
             } else if (data.status === "success") {
                 setIsLoading(false)
                 setJobId(jobId)
@@ -676,7 +676,8 @@ function ChatContent() {
                             chat_id: currentChatId,
                             user_id: userRef.current.id,
                             job_id: jobId,
-                            title: `Analysis: ${scanType}`
+                            title: `Analysis: ${scanType}`,
+                            address: targetAddress
                         })
 
                         // 2. Save User Message
@@ -758,7 +759,7 @@ function ChatContent() {
 
             if (response.data.job_id) {
                 activeJobIdRef.current = response.data.job_id  // Track active job for cleanup
-                pollStatus(response.data.job_id, scanType)
+                pollStatus(response.data.job_id, scanType, targetAddress)
             }
         } catch (err: any) {
             removeLoadingMessage()
@@ -864,7 +865,8 @@ function ChatContent() {
                     await axios.post(`${apiUrl}/api/chat/init`, {
                         chat_id: currentChatId,
                         user_id: userRef.current.id,
-                        title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`
+                        title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
+                        address: address
                     })
 
                     // 2. Save user message (the address they entered)

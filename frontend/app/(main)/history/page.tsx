@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faMessage, faSpinner, faChevronRight, faClock } from "@fortawesome/free-solid-svg-icons"
+import { faMessage, faSpinner, faChevronRight, faClock, faWallet } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 
@@ -12,6 +12,7 @@ interface ChatSession {
     chat_id: string
     title: string
     updated_at: string
+    address?: string
 }
 
 export default function HistoryPage() {
@@ -134,7 +135,7 @@ export default function HistoryPage() {
 
             {/* Chat List Container - max height limits, scrollable when needed */}
             <div
-                className="flex-1 overflow-y-auto overflow-x-hidden rounded-2xl pb-20"
+                className="flex-1 overflow-y-auto overflow-x-hidden rounded-3xl pb-20"
                 style={{
                     maxHeight: 'calc(95vh - 260px)', // Account for header, top bar, and bottom nav
                     minHeight: '200px'
@@ -181,7 +182,7 @@ export default function HistoryPage() {
                                             router.push(`/chat?chat_id=${chat.chat_id}`)
                                         }, 150)
                                     }}
-                                    className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
+                                    className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 rounded-3xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"
                                 >
                                     <AnimatePresence>
                                         {ripples.filter(r => r.chatId === chat.chat_id).map((ripple) => (
@@ -209,6 +210,12 @@ export default function HistoryPage() {
 
                                     <div className="flex justify-between items-center gap-3">
                                         <div className="flex-1 min-w-0">
+                                            {chat.address && (
+                                                <div className="flex items-center gap-1.5 text-white text-[10px] font-bold tracking-wider mb-1 opacity">
+                                                    <FontAwesomeIcon icon={faWallet} className="text-[9px]" />
+                                                    <span>{chat.address.slice(0, 6)}...{chat.address.slice(-4)}</span>
+                                                </div>
+                                            )}
                                             <h3 className="text-white font-medium truncate text-[15px] mb-0.5">
                                                 {chat.title || "New Chat"}
                                             </h3>
@@ -219,7 +226,7 @@ export default function HistoryPage() {
                                         <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10">
                                             <FontAwesomeIcon
                                                 icon={faChevronRight}
-                                                className="text-white/30 text-[10px] transition-colors group-hover:text-white/50"
+                                                className="text-white/50 text-[10px] transition-colors group-hover:text-white/70"
                                             />
                                         </div>
                                     </div>

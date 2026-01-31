@@ -452,6 +452,7 @@ class InitChatRequest(BaseModel):
     user_id: int
     job_id: str | None = None
     title: str = "New Chat"
+    address: str | None = None
 
 @app.post("/api/chat/init")
 async def init_chat(request: InitChatRequest):
@@ -462,7 +463,7 @@ async def init_chat(request: InitChatRequest):
         if existing_chat:
              return {"status": "ok", "message": "Chat already exists"}
 
-        save_chat(request.user_id, request.chat_id, request.title, job_id=request.job_id)
+        save_chat(request.user_id, request.chat_id, request.title, job_id=request.job_id, address=request.address)
         return {"status": "ok", "chat_id": request.chat_id}
     except Exception as e:
         print(f"[CHAT] Error initializing chat: {e}")
