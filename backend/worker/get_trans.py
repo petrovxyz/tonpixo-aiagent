@@ -629,6 +629,9 @@ def fetch_transactions(account_id, api_key=None, limit_events=None, labels_map=N
                     }
                     
                     all_data.append(result)
+                    
+                    if limit_events and len(all_data) >= limit_events:
+                        break
                 # --- Parsing Logic End ---
             
             print(f"   Fetched batch of {len(events)} events. Total actions so far: {len(all_data)}")

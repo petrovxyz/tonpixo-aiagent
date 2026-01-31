@@ -32,8 +32,9 @@ def lambda_handler(event, context):
         job_id = body['job_id']
         address = body['address']
         scan_type = body.get('scan_type', 'transactions')
+        limit = body.get('limit')  # User-specified limit for transactions
         
-        print(f"Processing job {job_id} for {address}, scan_type: {scan_type}")
+        print(f"Processing job {job_id} for {address}, scan_type: {scan_type}, limit: {limit}")
         
         # Check if already cancelled before starting
         if check_job_cancelled(job_id):
@@ -72,7 +73,7 @@ def lambda_handler(event, context):
             elif scan_type == 'nfts':
                 df = fetch_nfts(address, api_key=TONAPI_KEY, on_progress=on_progress)
             else:  # Default to transactions
-                df = fetch_history(address, api_key=TONAPI_KEY, on_progress=on_progress)
+                df = fetch_history(address, api_key=TONAPI_KEY, limit_events=limit, on_progress=on_progress)
             
             # Final cancellation check before saving
             if check_job_cancelled(job_id):
