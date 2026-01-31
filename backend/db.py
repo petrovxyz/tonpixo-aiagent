@@ -199,6 +199,26 @@ def get_chat_messages(chat_id: str):
         print(f"Error fetching messages for chat {chat_id}: {e}")
         return []
 
+def get_last_message(chat_id: str):
+    """
+    Retrieves the last (most recent) message for a specific chat.
+    """
+    if not MESSAGES_TABLE_NAME:
+        return None
+
+    try:
+        table = get_messages_table()
+        response = table.query(
+            KeyConditionExpression=Key('chat_id').eq(chat_id),
+            ScanIndexForward=False,  # Descending order (newest first)
+            Limit=1
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+    except ClientError as e:
+        print(f"Error fetching last message for chat {chat_id}: {e}")
+        return None
+
 def get_chat(chat_id: str):
     """
     Get chat metadata.

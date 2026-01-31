@@ -13,6 +13,8 @@ interface ChatSession {
     title: string
     updated_at: string
     address?: string
+    last_message?: string
+    last_message_role?: 'user' | 'agent'
 }
 
 export default function HistoryPage() {
@@ -225,9 +227,16 @@ export default function HistoryPage() {
                                                     <span>{chat.address.slice(0, 6)}...{chat.address.slice(-4)}</span>
                                                 </div>
                                             )}
-                                            <h3 className="text-white font-medium truncate text-[15px] mb-0.5">
-                                                {chat.title || "New Chat"}
-                                            </h3>
+                                            <p className="text-white font-medium text-[15px] truncate mb-1">
+                                                {chat.last_message ? (
+                                                    <>
+                                                        <span className="text-white/50">{chat.last_message_role === 'user' ? 'You: ' : 'Tonpixo: '}</span>
+                                                        {chat.last_message}
+                                                    </>
+                                                ) : (
+                                                    chat.title || "New Chat"
+                                                )}
+                                            </p>
                                             <span className="text-white/35 text-xs">
                                                 {formatDate(chat.updated_at)}
                                             </span>

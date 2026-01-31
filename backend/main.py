@@ -280,6 +280,23 @@ async def get_history(user_id: int, limit: int = 10, last_key: str = None):
     if len(unique_ids) != len(chat_ids):
         print(f"[HISTORY] WARNING: Duplicate chat_ids detected! Unique: {len(unique_ids)}, Total: {len(chat_ids)}")
     
+    # Enrich chats with last message preview
+    from db import get_last_message
+    enriched_chats = []
+    for chat in chats:
+        chat_data = dict(chat)
+        last_msg = get_last_message(chat['chat_id'])
+        if last_msg:
+            content = last_msg.get('content', '')
+            # Handle JSON content (like address details) - just show a simple preview
+            if content.startswith('{'):
+                chat_data['last_message'] = 'Address details...'
+            else:
+                # Truncate to 100 characters for preview
+                chat_data['last_message'] = content[:100] + ('...' if len(content) > 100 else '')
+            chat_data['last_message_role'] = last_msg.get('role', 'agent')
+        enriched_chats.append(chat_data)
+    
     # Get total count (only on first page load to avoid extra queries)
     total_count = None
     if not last_key:
@@ -290,7 +307,7 @@ async def get_history(user_id: int, limit: int = 10, last_key: str = None):
     if next_key:
         encoded_next_key = base64.b64encode(json.dumps(next_key).encode('utf-8')).decode('utf-8')
     
-    return {"chats": chats, "next_key": encoded_next_key, "total_count": total_count}
+    return {"chats": enriched_chats, "next_key": encoded_next_key, "total_count": total_count}
 
 @app.get("/api/chat/{chat_id}/history")
 async def get_chat_history(chat_id: str, user_id: int):
