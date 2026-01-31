@@ -477,9 +477,16 @@ function ChatContent() {
     if (chatIdParam && chatIdParam !== prevChatIdParamRef.current) {
         // Special case: If we already recovered the ID (e.g. from window fallback) and started a session,
         // we should not reset the session or trigger a history overwrite.
-        if (chatIdRef.current === chatIdParam && activeSessionRef.current) {
+        if ((chatIdRef.current === chatIdParam && activeSessionRef.current) || globalPendingChatId === chatIdParam) {
             console.log(`[CHAT-ID] URL param caught up to recovered ID ${chatIdParam}, preserving active session`)
             prevChatIdParamRef.current = chatIdParam
+
+            // Ensure session is marked active if matched via globalPendingChatId
+            if (globalPendingChatId === chatIdParam) {
+                activeSessionRef.current = true
+                if (!chatIdRef.current) chatIdRef.current = chatIdParam
+            }
+
             // Prevent loadHistory from running and overwriting the active session
             if (historyLoadedRef.current !== chatIdParam) {
                 historyLoadedRef.current = chatIdParam
@@ -737,6 +744,7 @@ function ChatContent() {
         console.trace('[CHAT-ID] Stack trace for new ID creation')
         setChatId(newId)
         chatIdRef.current = newId // Update ref immediately
+        globalPendingChatId = newId // Set global immediately to prevent race conditions during URL update
         // Update URL without reload
         const newUrl = new URL(window.location.href)
         newUrl.searchParams.set('chat_id', newId)
