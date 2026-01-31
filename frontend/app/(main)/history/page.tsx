@@ -41,12 +41,22 @@ export default function HistoryPage() {
             const response = await axios.get(`${apiUrl}/api/history`, { params })
             const newChats = response.data.chats || []
 
+            // Deduplicate by chat_id (in case of eventual consistency issues with DynamoDB GSI)
+            const deduplicateChats = (chats: ChatSession[]): ChatSession[] => {
+                const seen = new Set<string>()
+                return chats.filter(chat => {
+                    if (seen.has(chat.chat_id)) return false
+                    seen.add(chat.chat_id)
+                    return true
+                })
+            }
+
             if (lastKey) {
-                // Appending to existing chats
-                setChats(prev => [...prev, ...newChats])
+                // Appending to existing chats - deduplicate combined result
+                setChats(prev => deduplicateChats([...prev, ...newChats]))
             } else {
                 // Initial load
-                setChats(newChats)
+                setChats(deduplicateChats(newChats))
             }
 
             setNextKey(response.data.next_key || null)

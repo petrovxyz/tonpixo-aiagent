@@ -376,11 +376,14 @@ async def chat_stream(request: ChatRequest):
 
         save_message(request.chat_id, "user", request.question)
         if request.user_id:
-             # Basic title generation strategy: use first message
-             # But here use default/timestamp if first time?
-             # Let frontend handle title or update it later?
-             # For now just save chat to ensure it exists in index
-             save_chat(request.user_id, request.chat_id, title=request.question[:50], job_id=request.job_id)
+             # Only update timestamp and ensure user tracking - preserve existing title
+             # The chat should already be initialized with a proper title by frontend
+             if existing_chat:
+                 # Chat exists - just update timestamp, keep existing title
+                 save_chat(request.user_id, request.chat_id, title=existing_chat.get('title', 'New Chat'), job_id=request.job_id or existing_chat.get('job_id'))
+             else:
+                 # Chat doesn't exist - use question as title (fallback)
+                 save_chat(request.user_id, request.chat_id, title=request.question[:50], job_id=request.job_id)
 
     async def generate():
         full_response = ""

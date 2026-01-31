@@ -107,17 +107,23 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
     """
     Retrieves chats for a specific user, sorted by recently updated.
     Supports pagination via last_key.
+    
+    Note: Due to DynamoDB GSI eventual consistency, when updated_at changes,
+    the old index entry may briefly coexist with the new one. We deduplicate
+    by chat_id to prevent showing duplicate entries.
     """
     if not CHATS_TABLE_NAME:
         return [], None
 
     try:
         table = get_chats_table()
+        # Fetch more than the limit to account for potential duplicates
+        fetch_limit = limit * 2
         query_params = {
             'IndexName': 'UserChatsIndex',
             'KeyConditionExpression': Key('user_id').eq(str(user_id)),
             'ScanIndexForward': False, # Descending order (newest first)
-            'Limit': limit
+            'Limit': fetch_limit
         }
         
         if last_key:
@@ -126,7 +132,20 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
         response = table.query(**query_params)
         items = response.get('Items', [])
         next_key = response.get('LastEvaluatedKey')
-        return items, next_key
+        
+        # Deduplicate by chat_id, keeping the first occurrence (most recent updated_at)
+        # since results are sorted by updated_at descending
+        seen_chat_ids = set()
+        deduplicated_items = []
+        for item in items:
+            chat_id = item.get('chat_id')
+            if chat_id and chat_id not in seen_chat_ids:
+                seen_chat_ids.add(chat_id)
+                deduplicated_items.append(item)
+                if len(deduplicated_items) >= limit:
+                    break
+        
+        return deduplicated_items, next_key
     except ClientError as e:
         print(f"Error fetching chats for user {user_id}: {e}")
         return [], None
