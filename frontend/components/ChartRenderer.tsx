@@ -36,7 +36,7 @@ interface ChartRendererProps {
     config: ChartData;
 }
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00c49f'];
+const COLORS = ['#0088fe', '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f'];
 
 export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
     const { title, type, data, xAxisKey, dataKeys } = config;
