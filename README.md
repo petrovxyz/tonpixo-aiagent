@@ -2,6 +2,8 @@
 
 Tonpixo is an advanced, autonomous and serverless AI agent that transforms natural language into complex SQL queries for the TON (The Open Network) blockchain data. It provides users with deep insights into transactions, jettons, and NFTs for specified address using a conversational interface via Telegram Mini App (TMA).
 
+Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
+
 ## Technology stack
 
 ### Backend
@@ -80,6 +82,7 @@ The Agent interprets the number and generates a natural language response (or a 
 │   ├── components/         # Reusable React components
 │   └── public/             # Static assets
 └── README.md               # This file
+└── LICENSE                 # License
 ```
 
 ---
