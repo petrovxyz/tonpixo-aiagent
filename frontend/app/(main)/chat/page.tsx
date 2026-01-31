@@ -1419,9 +1419,8 @@ function ChatContent() {
                             onClick={handleToggleFavourite}
                             disabled={!currentAddress && !pendingAddress && !addressParam}
                             className={cn(
-                                "flex items-center justify-center w-14 h-14 bg-[#4FC3F7] border-2 border-white/20 rounded-full hover:bg-[#67cbf8] transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
-                                isMobile ? "mt-24" : "mt-10",
-                                isFavourite ? "text-white" : "text-black"
+                                "flex items-center justify-center text-black w-14 h-14 bg-[#4FC3F7] border-2 border-white/20 rounded-full hover:bg-[#67cbf8] transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+                                isMobile ? "mt-24" : "mt-10"
                             )}
                         >
                             <FontAwesomeIcon icon={isFavourite ? faStarSolid : faStarOutline} className="text-xl" />

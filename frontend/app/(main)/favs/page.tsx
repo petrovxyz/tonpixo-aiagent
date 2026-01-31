@@ -201,8 +201,7 @@ export default function FavsPage() {
 
                                     <div className="flex justify-between items-center gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <FontAwesomeIcon icon={faStar} className="text-white text-sm" />
+                                            <div className="flex items-center mb-1">
                                                 <p className="text-white font-medium text-[15px] truncate">
                                                     {fav.name || truncateAddress(fav.address)}
                                                 </p>
@@ -219,14 +218,14 @@ export default function FavsPage() {
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={(e) => handleRemoveFavourite(fav.address, e)}
-                                                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all hover:bg-red-500/20 hover:text-red-400 text-white/50 cursor-pointer"
+                                                className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center transition-all hover:bg-red-500/20 hover:text-red-400 text-white cursor-pointer"
                                             >
-                                                <FontAwesomeIcon icon={faTrash} className="text-[10px]" />
+                                                <FontAwesomeIcon icon={faTrash} className="text-[12px]" />
                                             </button>
-                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10">
+                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center transition-all group-hover:bg-white/15">
                                                 <FontAwesomeIcon
                                                     icon={faChevronRight}
-                                                    className="text-white/50 text-[10px] transition-colors group-hover:text-white/70"
+                                                    className="text-white text-[12px]"
                                                 />
                                             </div>
                                         </div>

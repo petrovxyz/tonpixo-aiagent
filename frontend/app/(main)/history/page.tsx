@@ -245,10 +245,10 @@ export default function HistoryPage() {
                                                 {formatDate(chat.updated_at)}
                                             </span>
                                         </div>
-                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-all group-hover:bg-white/10">
+                                        <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center transition-all group-hover:bg-white/15">
                                             <FontAwesomeIcon
                                                 icon={faChevronRight}
-                                                className="text-white/50 text-[10px] transition-colors group-hover:text-white/70"
+                                                className="text-white text-[12px]"
                                             />
                                         </div>
                                     </div>
