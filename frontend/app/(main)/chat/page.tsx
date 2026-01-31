@@ -457,6 +457,7 @@ function ChatContent() {
     const chatIdRef = useRef<string | null>(chatIdParam) // Initialize from URL param immediately
     const prevChatIdParamRef = useRef<string | null>(chatIdParam) // Track URL parameter changes
     const historyLoadedRef = useRef<string | null>(null) // Track if history has been loaded
+    const isProcessingAddressRef = useRef(false) // Prevent duplicate processing of address detection
 
     useEffect(() => {
         userRef.current = user
@@ -887,6 +888,9 @@ function ChatContent() {
 
     // Handle address detection and show acknowledgment
     const handleAddressReceived = async (address: string) => {
+        if (isProcessingAddressRef.current) return
+        isProcessingAddressRef.current = true
+
         setPendingAddress(address)
         setCurrentAddress(address)
 
@@ -1014,6 +1018,8 @@ function ChatContent() {
         setTimeout(() => {
             showScanTypeSelection(address)
         }, 500)
+
+        isProcessingAddressRef.current = false
     }
 
     // Show scan type selection buttons
