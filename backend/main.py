@@ -36,6 +36,7 @@ users_table = dynamodb.Table(USERS_TABLE_NAME)
 class GenerateRequest(BaseModel):
     address: str
     scan_type: str = "transactions"  # transactions, jettons, nfts
+    limit: int | None = None
 
 class AccountSummaryRequest(BaseModel):
     address: str
@@ -213,13 +214,15 @@ async def start_job(request: GenerateRequest):
         'job_id': job_id,
         'status': 'queued',
         'address': request.address,
-        'scan_type': request.scan_type
+        'scan_type': request.scan_type,
+        'limit': request.limit
     })
     
     message_body = json.dumps({
         'job_id': job_id, 
         'address': request.address,
-        'scan_type': request.scan_type
+        'scan_type': request.scan_type,
+        'limit': request.limit
     })
     sqs.send_message(QueueUrl=QUEUE_URL, MessageBody=message_body)
     

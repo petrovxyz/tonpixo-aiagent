@@ -444,6 +444,7 @@ function ChatContent() {
     const [currentScanType, setCurrentScanType] = useState<string | null>(null)
     const [isFavourite, setIsFavourite] = useState(false)
     const [currentAddress, setCurrentAddress] = useState<string | null>(null)
+    const [awaitingTransactionLimit, setAwaitingTransactionLimit] = useState(false)
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -807,7 +808,7 @@ function ChatContent() {
         }
     }
 
-    const startSearch = async (targetAddress: string, scanType: string) => {
+    const startSearch = async (targetAddress: string, scanType: string, limit?: number) => {
         setIsLoading(true)
         setCurrentScanType(scanType)
         setMessages(prev => [...prev.filter(m => m.content !== "collecting"), {
@@ -821,7 +822,8 @@ function ChatContent() {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
             const response = await axios.post(`${apiUrl}/api/generate`, {
                 address: targetAddress,
-                scan_type: scanType
+                scan_type: scanType,
+                limit: limit
             })
 
             if (response.data.job_id) {
@@ -1015,6 +1017,71 @@ function ChatContent() {
             'jettons': 'Jettons',
             'nfts': 'NFTs'
         }
+
+        // If user selected Transactions, ask for limit preference
+        if (scanType === 'transactions') {
+            addMessage("user", "Scan Transactions")
+
+            // Save this interaction to backend so it persists
+            const currentChatId = chatIdRef.current
+            if (currentChatId) {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                    role: "agent",
+                    content: "Would you like to scan all transactions or a specific amount?"
+                }).catch(console.error)
+            }
+
+            // Show options
+            addMessage("agent", (
+                <div className="flex flex-col gap-4">
+                    <p className="text-white">
+                        <AnimatedText isAgent={true}>
+                            Would you like to scan all transactions or a specific amount?
+                        </AnimatedText>
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                            <ActionButton
+                                onClick={() => {
+                                    addMessage("user", "All transactions")
+                                    setPendingAddress(null)
+                                    startSearch(address, 'transactions')
+                                }}
+                                variant="primary"
+                            >
+                                All transactions
+                            </ActionButton>
+                        </motion.div>
+                        <motion.div variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}>
+                            <ActionButton
+                                onClick={() => {
+                                    addMessage("user", "Specific amount", false, undefined, true)
+                                    // Save the question to history
+                                    const currentChatId = chatIdRef.current
+                                    if (currentChatId) {
+                                        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                                        axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                                            role: "agent",
+                                            content: "How many transactions do you want to scan? Please enter a number."
+                                        }).catch(console.error)
+                                    }
+
+                                    addMessage("agent", "How many transactions do you want to scan? Please enter a number.", false, undefined, true)
+                                    setAwaitingTransactionLimit(true)
+                                    setPendingAddress(address) // Keep address pending so we know which one to scan
+                                }}
+                                variant="primary"
+                            >
+                                Only specific amount
+                            </ActionButton>
+                        </motion.div>
+                    </div>
+                </div>
+            ), false, undefined, true)
+            return
+        }
+
         addMessage("user", `Scan ${labels[scanType]}`)
         setPendingAddress(null)
         startSearch(address, scanType)
@@ -1284,6 +1351,23 @@ function ChatContent() {
         if (!inputValue.trim()) return
         const text = inputValue.trim()
         setInputValue("")
+
+        // Handle Transaction Limit Input
+        if (awaitingTransactionLimit && pendingAddress) {
+            const limit = parseInt(text)
+            if (isNaN(limit) || limit <= 0) {
+                addMessage("agent", "Please enter a valid positive number.", false, undefined, true)
+                return
+            }
+
+            addMessage("user", text)
+            setAwaitingTransactionLimit(false)
+            const addressToScan = pendingAddress
+            setPendingAddress(null)
+            startSearch(addressToScan, 'transactions', limit)
+            return
+        }
+
         addMessage("user", text)
 
         if (!jobId) {
