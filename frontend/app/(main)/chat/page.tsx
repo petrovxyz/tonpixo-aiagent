@@ -16,6 +16,8 @@ import { useToast } from "@/components/Toast"
 
 // Global lock to prevent duplicate address processing across component remounts
 let globalProcessingAddress: string | null = null
+let globalPendingChatId: string | null = null
+let globalPendingMessages: Message[] | null = null
 
 // Message Type Definition
 interface Message {
@@ -960,6 +962,29 @@ function ChatContent() {
             // Save to backend for history - use centralized chat ID management
             const currentChatId = ensureChatId()
 
+            // Save state globally to survive potential component remounts updates
+            globalPendingChatId = currentChatId
+            globalPendingMessages = [
+                ...messages,
+                {
+                    id: Date.now().toString(),
+                    role: "user",
+                    content: `Address: ${address}`,
+                    timestamp: new Date()
+                },
+                {
+                    id: (Date.now() + 1).toString(),
+                    role: "agent",
+                    content: (
+                        <div className="flex items-center gap-2 text-white/50">
+                            <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                            <span>Fetching account details...</span>
+                        </div>
+                    ),
+                    timestamp: new Date()
+                }
+            ]
+
             if (userRef.current) {
                 try {
                     const data = response.data
@@ -1480,6 +1505,22 @@ function ChatContent() {
         if (hasUrlId) {
             console.log("[CHAT] ID found in window.location, skipping initialization (waiting for chatIdParam)")
             hasStartedRef.current = true
+
+            // Restore state from global backup if available (handles remounts)
+            if (globalPendingChatId && globalPendingMessages) {
+                // Check if the URL ID matches our pending ID
+                const urlParams = new URLSearchParams(window.location.search)
+                if (urlParams.get('chat_id') === globalPendingChatId) {
+                    console.log("[CHAT] Restoring state from global pending storage after remount")
+                    setMessages(globalPendingMessages)
+                    chatIdRef.current = globalPendingChatId
+                    activeSessionRef.current = true
+                    historyLoadedRef.current = globalPendingChatId
+                    // Clear globals
+                    globalPendingChatId = null
+                    globalPendingMessages = null
+                }
+            }
             return
         }
 
