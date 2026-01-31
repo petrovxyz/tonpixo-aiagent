@@ -893,6 +893,9 @@ function ChatContent() {
         if (globalProcessingAddress === address) return
         globalProcessingAddress = address
 
+        // Mark session as active to prevent history load from overwriting initial state
+        activeSessionRef.current = true
+
         setPendingAddress(address)
         setCurrentAddress(address)
 
