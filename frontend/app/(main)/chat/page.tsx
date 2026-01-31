@@ -675,7 +675,7 @@ function ChatContent() {
                 }
 
                 if (historyResponse.data.messages) {
-                    const loadedMessages = historyResponse.data.messages.map((msg: any) => {
+                    const loadedMessages = historyResponse.data.messages.map((msg: { message_id?: string, role: "user" | "agent", content: string, created_at: string, trace_id?: string }) => {
                         const parsed = parseStoredMessage(msg.content)
                         return {
                             id: msg.message_id || Math.random().toString(36),
@@ -690,10 +690,10 @@ function ChatContent() {
                     setMessages(loadedMessages)
                 }
 
-            } catch (error: any) {
+            } catch (error) {
                 console.error("Failed to load history:", error)
                 historyLoadedRef.current = null // Reset so it can retry
-                const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || "Unknown error"
+                const errorMsg = (error as any).response?.data?.error || (error as any).response?.data?.detail || (error as any).message || "Unknown error"
 
                 if (errorMsg.includes("Access denied")) {
                     showToast("Access denied: you cannot view this chat", "error")
@@ -892,9 +892,9 @@ function ChatContent() {
                 activeJobIdRef.current = response.data.job_id  // Track active job for cleanup
                 pollStatus(response.data.job_id, scanType, targetAddress)
             }
-        } catch (err: any) {
+        } catch (err) {
             removeLoadingMessage()
-            addMessage("agent", err.response?.data?.detail || "Failed to start generation.", false, undefined, true)
+            addMessage("agent", (err as any).response?.data?.detail || "Failed to start generation.", false, undefined, true)
             setIsLoading(false)
         }
     }
@@ -966,78 +966,89 @@ function ChatContent() {
                         animate={true}
                     />
                 ), false, undefined, true)
-            }
 
-            // Save to backend for history - use centralized chat ID management
-            const currentChatId = ensureChatId()
+                // Save to backend for history - use centralized chat ID management
+                const currentChatId = ensureChatId()
 
-            // Save state globally to survive potential component remounts updates
-            globalPendingChatId = currentChatId
-            globalPendingMessages = [
-                ...messages,
-                {
-                    id: Date.now().toString(),
-                    role: "user",
-                    content: `Address: ${address}`,
-                    timestamp: new Date()
-                },
-                {
+                // Save state globally to survive potential component remounts updates
+                globalPendingChatId = currentChatId
+
+                // Construct the result message for global storage
+                const resultMessage = {
                     id: (Date.now() + 1).toString(),
-                    role: "agent",
+                    role: "agent" as const, // Explicitly type as "agent"
                     content: (
-                        <div className="flex items-center gap-2 text-white/50">
-                            <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-                            <span>Fetching account details...</span>
-                        </div>
+                        <AddressDetailsMessage
+                            data={{
+                                type: 'address_details',
+                                address: address,
+                                rawAddress: data.address,
+                                status: data.status,
+                                isWallet: data.is_wallet,
+                                interfaces: data.interfaces,
+                                lastActivity: lastActivity,
+                                balance: balance,
+                                isScam: data.is_scam,
+                                hasError: false
+                            }}
+                            animate={true}
+                        />
                     ),
                     timestamp: new Date()
                 }
-            ]
 
-            if (userRef.current) {
-                try {
-                    const data = response.data
-                    const lastActivity = data.last_activity ? new Date(data.last_activity * 1000).toUTCString().replace(' GMT', '') : 'Unknown'
-                    const balance = data.balance ? (data.balance / 1000000000).toFixed(2) : '0.00'
+                globalPendingMessages = [
+                    ...messages.filter(m => m.id !== loadingId), // Remove loading message from history
+                    {
+                        id: Date.now().toString(),
+                        role: "user" as const,
+                        content: `Address: ${address}`,
+                        timestamp: new Date()
+                    },
+                    resultMessage
+                ]
 
-                    // Build JSON for storage (can be reconstructed to JSX)
-                    const addressDetailsJson: AddressDetailsData = {
-                        type: 'address_details',
-                        address: address,
-                        rawAddress: data.address,
-                        status: data.status,
-                        isWallet: data.is_wallet,
-                        interfaces: data.interfaces,
-                        lastActivity: lastActivity,
-                        balance: balance,
-                        isScam: data.is_scam,
-                        hasError: !!data.error
+                if (userRef.current) {
+                    try {
+                        // Reconstruct data object for backend storage
+                        const addressDetailsJson: AddressDetailsData = {
+                            type: 'address_details',
+                            address: address,
+                            rawAddress: data.address,
+                            status: data.status,
+                            isWallet: data.is_wallet,
+                            interfaces: data.interfaces,
+                            lastActivity: lastActivity,
+                            balance: balance,
+                            isScam: data.is_scam,
+                            hasError: !!data.error
+                        }
+
+                        // 1. Init chat
+                        await axios.post(`${apiUrl}/api/chat/init`, {
+                            chat_id: currentChatId,
+                            user_id: userRef.current.id,
+                            title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
+                            address: address
+                        })
+
+                        // 2. Save user message (the address they entered)
+                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                            role: "user",
+                            content: `Address: ${address}`
+                        })
+
+                        // 3. Save agent response as JSON
+                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                            role: "agent",
+                            content: JSON.stringify(addressDetailsJson)
+                        })
+                    } catch (e) {
+                        console.error("Failed to save address details to history:", e)
                     }
-
-                    // 1. Init chat
-                    await axios.post(`${apiUrl}/api/chat/init`, {
-                        chat_id: currentChatId,
-                        user_id: userRef.current.id,
-                        title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
-                        address: address
-                    })
-
-                    // 2. Save user message (the address they entered)
-                    await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
-                        role: "user",
-                        content: `Address: ${address}`
-                    })
-
-                    // 3. Save agent response as JSON
-                    await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
-                        role: "agent",
-                        content: JSON.stringify(addressDetailsJson)
-                    })
-                } catch (e) {
-                    console.error("Failed to save address details to history:", e)
                 }
             }
-        } catch (err) {
+        } catch (_) {
             // Remove loading message
             setMessages(prev => prev.filter(m => m.id !== loadingId))
             // Fallback (same as error above)
@@ -1410,8 +1421,8 @@ function ChatContent() {
                 streamingMsgIdRef.current = null
             }
 
-        } catch (err: any) {
-            if (err.name === 'AbortError') {
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') {
                 console.log('[STREAM] Aborted')
                 return
             }
@@ -1428,7 +1439,7 @@ function ChatContent() {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 const responseData = response.data
                 addMessage("agent", responseData.answer || "I couldn't get an answer.", false, responseData.trace_id)
-            } catch (fallbackErr) {
+            } catch (_) {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 addMessage("agent", "I encountered an error talking to the agent.")
             }
@@ -1498,6 +1509,38 @@ function ChatContent() {
         // chatIdRef is now synced synchronously at the top of the component
         if (chatIdParam) {
             hasStartedRef.current = true
+
+            // Check if we need to restore state after URL update for new chat (handles remounts)
+            if (globalPendingChatId === chatIdParam && globalPendingMessages) {
+                const lastMsg = globalPendingMessages[globalPendingMessages.length - 1]
+                // Check if the content is our result component
+                // @ts-expect-error - accessing internal react element type
+                const isResult = lastMsg?.content?.type === AddressDetailsMessage
+
+                if (isResult) {
+                    console.log(`[CHAT] Restoring finished result for ${chatIdParam}`)
+                    setMessages(globalPendingMessages)
+                    activeSessionRef.current = true
+                    historyLoadedRef.current = chatIdParam
+
+                    // Show scan options since we restored the result
+                    if (addressParam) {
+                        setTimeout(() => showScanTypeSelection(addressParam), 500)
+                    }
+                } else {
+                    console.log(`[CHAT] Restoring interrupted fetch - restarting process`)
+                    // The fetch was interrupted (e.g. component remounted while fetching),
+                    // so we need to restart it safely
+                    globalProcessingAddress = null
+                    if (addressParam) {
+                        handleAddressReceived(addressParam)
+                    }
+                }
+
+                // Clear globals
+                globalPendingChatId = null
+                globalPendingMessages = null
+            }
             return
         }
 
@@ -1542,6 +1585,7 @@ function ChatContent() {
             hasStartedRef.current = true
             addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addressParam, chatIdParam])
 
     return (
