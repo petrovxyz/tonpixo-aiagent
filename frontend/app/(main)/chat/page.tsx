@@ -470,15 +470,26 @@ function ChatContent() {
     // CRITICAL: Sync chatIdRef immediately when URL parameter changes
     // This must happen synchronously before any other effects that might call ensureChatId
     if (chatIdParam && chatIdParam !== prevChatIdParamRef.current) {
-        console.log(`[CHAT-ID] URL param changed from ${prevChatIdParamRef.current} to ${chatIdParam}, syncing ref immediately`)
-        chatIdRef.current = chatIdParam
-        prevChatIdParamRef.current = chatIdParam
-        // Reset all session tracking refs when navigating to a different chat
-        activeSessionRef.current = false
-        hasStartedRef.current = false
-        // Reset historyLoadedRef if navigating to a DIFFERENT chat (not the same one)
-        if (historyLoadedRef.current !== chatIdParam) {
-            historyLoadedRef.current = null
+        // Special case: If we already recovered the ID (e.g. from window fallback) and started a session,
+        // we should not reset the session or trigger a history overwrite.
+        if (chatIdRef.current === chatIdParam && activeSessionRef.current) {
+            console.log(`[CHAT-ID] URL param caught up to recovered ID ${chatIdParam}, preserving active session`)
+            prevChatIdParamRef.current = chatIdParam
+            // Prevent loadHistory from running and overwriting the active session
+            if (historyLoadedRef.current !== chatIdParam) {
+                historyLoadedRef.current = chatIdParam
+            }
+        } else {
+            console.log(`[CHAT-ID] URL param changed from ${prevChatIdParamRef.current} to ${chatIdParam}, syncing ref immediately`)
+            chatIdRef.current = chatIdParam
+            prevChatIdParamRef.current = chatIdParam
+            // Reset all session tracking refs when navigating to a different chat
+            activeSessionRef.current = false
+            hasStartedRef.current = false
+            // Reset historyLoadedRef if navigating to a DIFFERENT chat (not the same one)
+            if (historyLoadedRef.current !== chatIdParam) {
+                historyLoadedRef.current = null
+            }
         }
     } else if (!chatIdParam && prevChatIdParamRef.current) {
         // Navigating away from an existing chat to new chat
@@ -692,6 +703,20 @@ function ChatContent() {
             console.log(`[CHAT-ID] Returning existing chatId: ${chatIdRef.current}`)
             return chatIdRef.current
         }
+
+        // Fallback: Check if URL actually has an ID (client-side only check)
+        // This handles cases where useSearchParams() or routing is lagging behind the actual URL
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search)
+            const urlId = urlParams.get('chat_id')
+            if (urlId) {
+                console.log(`[CHAT-ID] Recovered ID from existing URL: ${urlId}`)
+                chatIdRef.current = urlId
+                setChatId(urlId)
+                return urlId
+            }
+        }
+
         const newId = crypto.randomUUID()
         console.log(`[CHAT-ID] Creating NEW chatId: ${newId}`)
         console.trace('[CHAT-ID] Stack trace for new ID creation')
@@ -1437,8 +1462,18 @@ function ChatContent() {
             // Use new flow for URL parameter too
             handleAddressReceived(addressParam)
         } else if (!hasStartedRef.current) {
-            hasStartedRef.current = true
-            addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
+            // Only show welcome if there is truly no ID in URL
+            // This prevents showing 'Welcome' (and breaking history load) when ID param is just lagging
+            let hasUrlId = false
+            if (typeof window !== 'undefined') {
+                const urlParams = new URLSearchParams(window.location.search)
+                if (urlParams.get('chat_id')) hasUrlId = true
+            }
+
+            if (!hasUrlId) {
+                hasStartedRef.current = true
+                addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
+            }
         }
     }, [addressParam, chatIdParam])
 
