@@ -318,8 +318,8 @@ If the user asks about a specific service (e.g., "Fragment", "CryptoBot", "Ston.
     - ALWAYS use case-insensitive fuzzy matching: `lower(label) LIKE '%service_name%'`.
     Example: User asks "How much did I spend on Fragment?". 
     Query: `SELECT sum(amount) FROM transactions WHERE job_id = '...' AND lower(label) LIKE '%fragment%'`.
-    - If `label` is likely empty, check `comment` as a fallback:
-    Query: `... WHERE (lower(label) LIKE '%name%' OR lower(comment) LIKE '%name%') ...`
+    - If `label` is likely empty, check `comment` and `wallet_comment` as a fallback:
+    Query: `... WHERE (lower(label) LIKE '%name%' OR lower(comment) LIKE '%name%' OR lower(wallet_comment) LIKE '%name%') ...`
 
 Workflow:
 1. Think about the SQL query needed to answer the question.
