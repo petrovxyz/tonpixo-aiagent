@@ -271,6 +271,15 @@ async def get_history(user_id: int, limit: int = 10, last_key: str = None):
     
     chats, next_key = get_user_chats(user_id, limit, decoded_last_key)
     
+    # Debug: Log returned chats to diagnose duplicate issue
+    chat_ids = [c.get('chat_id') for c in chats]
+    print(f"[HISTORY] Returning {len(chats)} chats for user {user_id}: {chat_ids}")
+    
+    # Check for duplicates in the result
+    unique_ids = set(chat_ids)
+    if len(unique_ids) != len(chat_ids):
+        print(f"[HISTORY] WARNING: Duplicate chat_ids detected! Unique: {len(unique_ids)}, Total: {len(chat_ids)}")
+    
     # Get total count (only on first page load to avoid extra queries)
     total_count = None
     if not last_key:

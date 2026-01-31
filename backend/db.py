@@ -67,7 +67,7 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
              UpdateExpression=update_expr,
              ExpressionAttributeValues=expr_values
         )
-        print(f"Chat {chat_id} saved for user {user_id}")
+        print(f"Chat {chat_id} saved for user {user_id} with title='{title[:30]}...' at {timestamp}")
         return chat_id
     except ClientError as e:
         print(f"Error saving chat: {e}")
@@ -133,10 +133,15 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
         items = response.get('Items', [])
         next_key = response.get('LastEvaluatedKey')
         
+        # Debug: Log raw items before deduplication
+        raw_chat_ids = [(item.get('chat_id'), item.get('updated_at')) for item in items]
+        print(f"[DB] Raw query returned {len(items)} items for user {user_id}: {raw_chat_ids}")
+        
         # Deduplicate by chat_id, keeping the first occurrence (most recent updated_at)
         # since results are sorted by updated_at descending
         seen_chat_ids = set()
         deduplicated_items = []
+        duplicates_found = 0
         for item in items:
             chat_id = item.get('chat_id')
             if chat_id and chat_id not in seen_chat_ids:
@@ -144,7 +149,14 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
                 deduplicated_items.append(item)
                 if len(deduplicated_items) >= limit:
                     break
+            elif chat_id in seen_chat_ids:
+                duplicates_found += 1
+                print(f"[DB] Filtered duplicate chat_id: {chat_id}, updated_at: {item.get('updated_at')}")
         
+        if duplicates_found > 0:
+            print(f"[DB] Removed {duplicates_found} duplicate chat entries")
+        
+        print(f"[DB] Returning {len(deduplicated_items)} deduplicated items")
         return deduplicated_items, next_key
     except ClientError as e:
         print(f"Error fetching chats for user {user_id}: {e}")

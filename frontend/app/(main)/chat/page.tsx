@@ -822,16 +822,8 @@ function ChatContent() {
                 ), false, undefined, true)
             }
 
-            // Save to backend for history
-            const currentChatId = chatIdRef.current || crypto.randomUUID()
-            if (!chatIdRef.current) {
-                chatIdRef.current = currentChatId
-                setChatId(currentChatId)
-                // Update URL
-                const newUrl = new URL(window.location.href)
-                newUrl.searchParams.set('chat_id', currentChatId)
-                window.history.pushState({}, '', newUrl.toString())
-            }
+            // Save to backend for history - use centralized chat ID management
+            const currentChatId = ensureChatId()
 
             if (userRef.current) {
                 try {
