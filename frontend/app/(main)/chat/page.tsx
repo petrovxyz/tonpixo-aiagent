@@ -610,6 +610,10 @@ function ChatContent() {
                         setJobId(metaResponse.data.job_id)
                         activeJobIdRef.current = metaResponse.data.job_id
                     }
+                    // Set address from metadata so star button works
+                    if (metaResponse.data.address) {
+                        setCurrentAddress(metaResponse.data.address)
+                    }
                 }
 
                 // 2. Get Messages
