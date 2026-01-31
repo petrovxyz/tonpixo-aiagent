@@ -21,7 +21,18 @@ from db import save_chat, save_message, get_user_chats, get_chat_messages, get_c
 app = FastAPI()
 
 # Note: CORS is handled by Lambda Function URL configuration in template.yaml
-# Do NOT add CORSMiddleware here - it will cause duplicate headers
+# Do NOT add CORSMiddleware here indefinitely - it will cause duplicate headers in production.
+# We exclusively add it for local development (when not running in Lambda).
+if not os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    from fastapi.middleware.cors import CORSMiddleware
+    print("Running locally - Adding CORS middleware")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 sqs = boto3.client('sqs')
 dynamodb = boto3.resource('dynamodb')
