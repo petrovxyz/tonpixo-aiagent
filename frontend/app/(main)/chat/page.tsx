@@ -1462,24 +1462,30 @@ function ChatContent() {
             return
         }
 
+        // Fallback: Check if URL actually has an ID (client-side only check)
+        // If an ID exists in the URL (even if useSearchParams is lagging), 
+        // we treat this as a "History Mode" session and AVOID starting a new search/welcome flow.
+        // This prevents duplicate execution of handleAddressReceived (double-saving) on remounts.
+        let hasUrlId = false
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search)
+            if (urlParams.get('chat_id')) hasUrlId = true
+        }
+
+        if (hasUrlId) {
+            console.log("[CHAT] ID found in window.location, skipping initialization (waiting for chatIdParam)")
+            hasStartedRef.current = true
+            return
+        }
+
         if (addressParam && !hasStartedRef.current) {
             hasStartedRef.current = true
             addMessage("user", `Search: ${addressParam}`)
             // Use new flow for URL parameter too
             handleAddressReceived(addressParam)
         } else if (!hasStartedRef.current) {
-            // Only show welcome if there is truly no ID in URL
-            // This prevents showing 'Welcome' (and breaking history load) when ID param is just lagging
-            let hasUrlId = false
-            if (typeof window !== 'undefined') {
-                const urlParams = new URLSearchParams(window.location.search)
-                if (urlParams.get('chat_id')) hasUrlId = true
-            }
-
-            if (!hasUrlId) {
-                hasStartedRef.current = true
-                addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
-            }
+            hasStartedRef.current = true
+            addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
         }
     }, [addressParam, chatIdParam])
 
