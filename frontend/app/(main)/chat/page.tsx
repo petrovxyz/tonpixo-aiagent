@@ -671,29 +671,29 @@ function ChatContent() {
                         // Construct markdown for agent message
                         const agentMarkdown = `### Analysis complete\n\nI'm done! ${data.count} ${getScanTypeLabel(scanType)} have been scanned and I'm ready for your questions.`
 
-                        // 1. Ensure chat exists
-                        await axios.post(`${apiUrl}/api/chat/init`, {
-                            chat_id: currentChatId,
-                            user_id: userRef.current.id,
-                            job_id: jobId,
-                            title: `Analysis: ${scanType}`,
-                            address: targetAddress
-                        })
-
-                        // 2. Save User Message
+                        // Chat already initialized in handleAddressReceived - just save messages
+                        // 1. Save User Message (scan type selection)
                         await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                             role: "user",
                             content: userMessage
                         })
 
-                        // 3. Save Agent Message
+                        // 2. Save Agent Message (analysis complete)
                         await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                             role: "agent",
                             content: agentMarkdown
                         })
 
+                        // Update chat with job_id (without re-initializing)
+                        await axios.post(`${apiUrl}/api/chat/init`, {
+                            chat_id: currentChatId,
+                            user_id: userRef.current.id,
+                            job_id: jobId,
+                            address: targetAddress
+                        })
+
                     } catch (e) {
-                        console.error("Failed to init chat/save messages:", e)
+                        console.error("Failed to save messages:", e)
                     }
                 }
 

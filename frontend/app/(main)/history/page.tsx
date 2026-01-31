@@ -211,8 +211,7 @@ export default function HistoryPage() {
                                     <div className="flex justify-between items-center gap-3">
                                         <div className="flex-1 min-w-0">
                                             {chat.address && (
-                                                <div className="flex items-center gap-1.5 text-white text-[10px] font-bold tracking-wider mb-1 opacity">
-                                                    <FontAwesomeIcon icon={faWallet} className="text-[9px]" />
+                                                <div className="flex items-center text-white text-[12px] font-bold tracking-wider mb-2 opacity">
                                                     <span>{chat.address.slice(0, 6)}...{chat.address.slice(-4)}</span>
                                                 </div>
                                             )}

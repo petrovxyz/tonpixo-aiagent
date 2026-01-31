@@ -461,13 +461,18 @@ async def init_chat(request: InitChatRequest):
         # Check if chat already exists
         existing_chat = get_chat(request.chat_id)
         if existing_chat:
-             return {"status": "ok", "message": "Chat already exists"}
+            # If job_id is provided and chat exists, update to link the job
+            if request.job_id:
+                save_chat(request.user_id, request.chat_id, existing_chat.get('title', 'New Chat'), job_id=request.job_id, address=request.address or existing_chat.get('address'))
+                return {"status": "ok", "message": "Chat updated with job_id"}
+            return {"status": "ok", "message": "Chat already exists"}
 
         save_chat(request.user_id, request.chat_id, request.title, job_id=request.job_id, address=request.address)
         return {"status": "ok", "chat_id": request.chat_id}
     except Exception as e:
         print(f"[CHAT] Error initializing chat: {e}")
         return {"status": "error", "message": str(e)}
+
 
 class SaveMessageRequest(BaseModel):
     role: str
