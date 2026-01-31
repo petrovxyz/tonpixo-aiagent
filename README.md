@@ -9,7 +9,7 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 *   **Serverless runtime**: AWS Lambda (Container Image support).
 *   **AI engine**:
     *   [LangChain](https://www.langchain.com/) & [LangGraph](https://langchain-ai.github.io/langgraph/) - orchestration of AI agents.
-    *   **AWS Bedrock** - foundation models.
+    *   **AWS Bedrock** - foundation models (Claude Haiku 4.5).
 *   **Database**:
     *   **Amazon DynamoDB** - NoSQL database for users, chats, jobs, and favorites.
     *   **Amazon S3** - object storage for transaction data (Parquet format) and analysis results.
@@ -31,7 +31,7 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 ### Infrastructure (AWS)
 *   **AWS SAM (Serverless Application Model)** - Infrastructure as Code (IaC).
 *   **Amazon API Gateway** - REST API entry point.
-*   **Amazon Secrets Manager** - Secure management of API keys and tokens.
+*   **Amazon Secrets Manager** - secure management of API keys and tokens.
 
 ---
 
@@ -58,8 +58,8 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 
 Before deploying, ensure you have the following installed:
 
-1.  **AWS CLI** - [Install Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-2.  **AWS SAM CLI** - [Install Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+1.  **AWS CLI** - [install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+2.  **AWS SAM CLI** - [install guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 3.  **Docker** - required for building Lambda container images.
 4.  **Node.js 20+** - for frontend.
 5.  **Python 3.12** - for backend local development.
