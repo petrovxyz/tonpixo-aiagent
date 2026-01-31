@@ -1,114 +1,174 @@
 # Tonpixo AI Agent
 
-**Tonpixo** is an autonomous, serverless AI agent that transforms natural language into complex SQL queries for The Open Network (TON) blockchain data.
+Tonpixo is an advanced, autonomous and serverless AI agent that transforms natural language into complex SQL queries for the TON (The Open Network) blockchain data. It provides users with deep insights into transactions, jettons, and NFTs for specified address using a conversational interface via Telegram Mini App (TMA).
 
-Tonpixo utilizes **Claude Haiku 4.5** LLM to dynamically analyze addresses transaction history, Jettons (tokens), and NFTs on TON. It treats blockchain data not as a static feed, but as a queryable Data Lake.
+## Technology stack
+
+### Backend
+*   **Framework**: [FastAPI](https://fastapi.tiangolo.com/).
+*   **Serverless runtime**: AWS Lambda (Container Image support).
+*   **AI engine**:
+    *   [LangChain](https://www.langchain.com/) & [LangGraph](https://langchain-ai.github.io/langgraph/) - orchestration of AI agents.
+    *   **AWS Bedrock** - foundation models.
+*   **Database**:
+    *   **Amazon DynamoDB** - NoSQL database for users, chats, jobs, and favorites.
+    *   **Amazon S3** - object storage for transaction data (Parquet format) and analysis results.
+*   **Data processing**:
+    *   **Data provider**: [TON API](https://tonapi.io/).
+    *   **Labels**: [ton-labels](https://github.com/ton-studio/ton-labels).
+    *   **AWS Athena** & **AWS Glue** - serverless interactivity query service for analyzing blockchain data.
+    *   **Pandas** & **AWS Wrangler** - data manipulation.
+*   **Queue**: Amazon SQS - decoupling long-running scanning jobs from the API.
+*   **Observability**: [Langfuse](https://langfuse.com/) - LLM engineering platform for tracing and metrics.
+
+### Frontend
+*   **Framework**: [Next.js 16](https://nextjs.org/) (App Router).
+*   **Language**: TypeScript.
+*   **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) & Vanilla CSS.
+*   **UI Components**: FontAwesome, Framer Motion (animations), Recharts (charts).
+*   **Integration**: Telegram Mini Apps SDK (`@tma.js/sdk`).
+
+### Infrastructure (AWS)
+*   **AWS SAM (Serverless Application Model)** - Infrastructure as Code (IaC).
+*   **Amazon API Gateway** - REST API entry point.
+*   **Amazon Secrets Manager** - Secure management of API keys and tokens.
 
 ---
 
-## 🚀 Key features
+## Project structure
 
-* **Natural language interface:** ask questions like *"How much TON did I swapped to USDT last month?"*.
-* **Deep analytics:** the agent generates and executes optimized **SQL (Presto)** queries directly against your data.
-* **Visualizations:** automatically generates charts (bar, line, pie) based on SQL results.
-* **Context awareness:** remembers conversation history and user facts using hybrid memory persistence (DynamoDB).
-* **Enterprise-grade performance:** processes thousands of transactions in seconds using a columnar storage format (Parquet) and distributed query engine (Athena).
+```bash
+.
+├── backend/                # Python FastAPI Serverless Application
+│   ├── agent.py            # AI Agent logic and LangGraph definition
+│   ├── main.py             # FastAPI entry point and routes
+│   ├── template.yaml       # AWS SAM Infrastructure definition
+│   ├── requirements.txt    # Python dependencies
+│   └── worker/             # Background worker logic for processing jobs
+├── frontend/               # Next.js Web Application
+│   ├── app/                # App Router pages and layouts
+│   ├── components/         # Reusable React components
+│   └── public/             # Static assets
+└── README.md               # This file
+```
 
 ---
 
-## Tech stack
-- **Frontend**: Next.js 14, Tailwind CSS, TypeScript, FontAwesome.
-- **Backend**: Python FastAPI, LangChain, AWS (DynamoDB, Athena, SQS, Bedrock), Pandas.
-- **Database**: AWS DynamoDB.
-- **Queue**: AWS SQS.
+## Prerequisites
+
+Before deploying, ensure you have the following installed:
+
+1.  **AWS CLI** - [Install Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+2.  **AWS SAM CLI** - [Install Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+3.  **Docker** - required for building Lambda container images.
+4.  **Node.js 20+** - for frontend.
+5.  **Python 3.12** - for backend local development.
 
 ---
 
-## Local development setup
+## Deployment guide (AWS)
 
-Follow these steps to run the application locally on your machine.
+This application is designed to be deployed using AWS SAM. Follow these steps carefully to deploy the full stack to your AWS account.
 
-### Prerequisites
-- **Node.js**: v18 or higher
-- **Python**: v3.9 or higher
-- **AWS CLI**: configured with credentials that have access to the project's DynamoDB tables and SQS queues.
-  ```bash
-  aws configure
-  ```
+### 1. Build the backend
 
-### 1. Backend setup
+Navigate to the backend directory and build the application. We use `--use-container` to ensure the Python dependencies (like Pandas and NumPy) are compiled correctly for the AWS Lambda Linux environment.
 
-1.  Navigate to the backend directory:
+```bash
+cd backend
+sam build --use-container
+```
+
+### 2. Initial deployment
+
+If this is your **first time** deploying, run the guided deployment. This will help you set up the `samconfig.toml` file and save your configuration.
+
+```bash
+sam deploy --guided
+```
+
+You will be prompted to enter parameters. Have the following ready:
+*   **Stack Name**: `tonpixo` (or your preferred name)
+*   **Region**: e.g., `us-east-1`
+*   **TonApiKey**: your API key from [tonapi.io](https://tonapi.io/).
+*   **TelegramBotToken**: your Bot Token from Telegram's BotFather.
+*   **LangfuseSecretKey**: your Secret Key from Langfuse.
+*   **LangfusePublicKey**: your Public Key from Langfuse.
+*   **LangfuseHost**: defaults to `https://cloud.langfuse.com`.
+
+**Note:** when asked if you want to save arguments to configuration file, say **Y**.
+
+### 3. Subsequent deployments
+
+For future updates, you can use the following single-line command. This builds the container and deploys using the saved configuration without interactive prompts.
+
+```bash
+sam build --use-container && sam deploy --resolve-image-repos --no-confirm-changeset --stack-name tonpixo --capabilities CAPABILITY_IAM
+```
+
+**Command breakdown:**
+*   `sam build --use-container`: builds the application using a Docker container to ensure compatibility with AWS Lambda.
+*   `--resolve-image-repos`: automatically creates and manages ECR repositories for your Docker images.
+*   `--no-confirm-changeset`: deploys immediately without waiting for manual confirmation of the changeset.
+*   `--stack-name tonpixo`: specifies the CloudFormation stack name.
+*   `--capabilities CAPABILITY_IAM`: acknowledges that SAM will create IAM roles and permissions required for your app.
+
+### 4. Deploying the frontend
+
+After the backend is deployed, SAM will output the `FunctionUrl`. You need to configure this in your frontend.
+
+1.  Create a `.env.local` file in the `frontend` folder or specify the environment variables in the Vercel / AWS Amplify console.
+2.  Add your backend URL:
+    ```env
+    NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
+    AMPLIFY_MONOREPO_APP_ROOT=frontend
+    ```
+3.  Deploy requests to Vercel, AWS Amplify, or any static hosting provider.
+    ```bash
+    cd frontend
+    npm run build
+    ```
+
+---
+
+## Local development
+
+### Backend
+
+1.  Navigate to `backend`:
     ```bash
     cd backend
     ```
-
 2.  Create and activate a virtual environment:
     ```bash
-    # macOS/Linux
     python3 -m venv venv
-    source venv/bin/activate
-
-    # Windows
-    python -m venv venv
-    .\venv\Scripts\activate
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
-
 3.  Install dependencies:
     ```bash
     pip install -r requirements.txt
     ```
-
-4.  **Environment variables**:
-    Ensure you have a `.env` file in the `backend/` directory. This file should contain:
-    - `TELEGRAM_BOT_TOKEN`: your Telegram Bot Token
-    - `TONAPI_KEY`: API key for TonApi.io
-    - `AWS_DEFAULT_REGION`: e.g., us-east-1
-    - `JOBS_TABLE`: name of the DynamoDB table for jobs
-    - `USERS_TABLE`: name of the DynamoDB table for users
-    - `JOBS_QUEUE_URL`: URL of the SQS queue
-    - `LANGFUSE_...`: Langfuse tracing keys (optional for local dev)
-
-5.  Run the backend server:
+4.  Create a `.env` file with your keys (see `template.yaml` parameters).
+5.  Run the local server:
     ```bash
-    # Runs on port 8000 with hot reload
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    python main.py
     ```
-    The API should now be accessible at `http://localhost:8000`.
 
-### 2. Frontend setup
+### Frontend
 
-1.  Open a new terminal and navigate to the frontend directory:
+1.  Navigate to `frontend`:
     ```bash
     cd frontend
     ```
-
 2.  Install dependencies:
     ```bash
     npm install
+    # or
+    yarn install
     ```
-
-3.  **Environment variables**:
-    Ensure you have a `.env.local` file in the `frontend/` directory with the following content:
-    ```env
-    NEXT_PUBLIC_API_URL=http://localhost:8000
-    ```
-
-4.  Run the development server:
+3.  Run the development server:
     ```bash
     npm run dev
     ```
 
-5.  Open your browser to [http://localhost:3000](http://localhost:3000).
-
-### 3. Usage & testing
-
--   **Authentication**: when running locally on `localhost:3000`, the app detects it is not inside Telegram and uses a **mock user** automatically. This allows you to test the full flow without needing to deploy to Telegram.
--   **Chat & analysis**: you can start new scans and chat with the agent. The backend will process these using the configured AWS credentials.
--   **Favicon/icons**: if resources are missing locally, placeholders may be used.
-
-## Troubleshooting
-
--   **"Access Denied" or auth errors**: ensure your backend is running on port 8000. If running on a different port, update `frontend/.env.local`.
--   **AWS permissions**: if scans fail or history doesn't load, check your local AWS credentials (`~/.aws/credentials`) and ensure your IAM user has permission to read/write to the DynamoDB tables and SQS queues defined in `.env`.
--   **Database errors**: if the backend logs "Could not save to DynamoDB", check your internet connection and VPN/Firewall settings blocking AWS.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. Note that to test Telegram-specific features, you specifically need to open the app via the Telegram client.
