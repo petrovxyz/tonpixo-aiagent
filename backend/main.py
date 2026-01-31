@@ -149,6 +149,11 @@ async def login(request: LoginRequest):
             print("[LOGIN] Skipping signature validation (DEVELOPMENT MODE ONLY)")
             skip_validation = True
         
+        # Also skip validation if using mock data (from local frontend)
+        if "query_id=mock" in request.initData:
+            print("[LOGIN] Mock data detected. Skipping signature validation.")
+            skip_validation = True
+        
         # Validate initData signature (CRITICAL SECURITY CHECK)
         if not skip_validation:
             is_valid, validated_data, error_msg = validate_telegram_init_data(
