@@ -371,7 +371,7 @@ async def chat(request: ChatRequest):
             save_chat(request.user_id, request.chat_id, f"Chat started {datetime.utcnow().isoformat()}", job_id=request.job_id)
 
     try:
-        result = process_chat(request.job_id, request.question)
+        result = process_chat(request.job_id, request.question, user_id=str(request.user_id) if request.user_id else None, chat_id=request.chat_id)
         
         # Save agent message
         if request.chat_id:
@@ -419,7 +419,7 @@ async def chat_stream(request: ChatRequest):
         final_trace_id = None
         
         try:
-            async for event in process_chat_stream(request.job_id, request.question):
+            async for event in process_chat_stream(request.job_id, request.question, user_id=str(request.user_id) if request.user_id else None, chat_id=request.chat_id):
                 event_type = event.get("type", "")
                 
                 if event_type == "token":

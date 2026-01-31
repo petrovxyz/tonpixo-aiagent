@@ -219,6 +219,29 @@ def get_last_message(chat_id: str):
         print(f"Error fetching last message for chat {chat_id}: {e}")
         return None
 
+def get_recent_chat_messages(chat_id: str, limit: int = 20):
+    """
+    Retrieves the last `limit` messages for a specific chat.
+    Returns them in chronological order (oldest first).
+    """
+    if not MESSAGES_TABLE_NAME:
+        return []
+
+    try:
+        table = get_messages_table()
+        # Fetch in reverse order (newest first) to get the last N
+        response = table.query(
+            KeyConditionExpression=Key('chat_id').eq(chat_id),
+            ScanIndexForward=False,  # Descending order, newest first
+            Limit=limit
+        )
+        items = response.get('Items', [])
+        # Reverse to return chronological order (oldest first)
+        return items[::-1]
+    except ClientError as e:
+        print(f"Error fetching recent messages for chat {chat_id}: {e}")
+        return []
+
 def get_chat(chat_id: str):
     """
     Get chat metadata.

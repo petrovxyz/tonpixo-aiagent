@@ -396,7 +396,7 @@ If the user asks for a chart, graph, or visualization:
     return workflow.compile()
 
 
-def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
+def process_chat(job_id: str, question: str, user_id: str = None, chat_id: str = None) -> dict:
     """
     Process a chat message using the LangGraph agent.
     
@@ -404,17 +404,10 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
         job_id: Unique job identifier
         question: User's question to answer
         user_id: Optional user ID for Langfuse tracking
+        chat_id: Optional chat ID to load history
         
     Returns:
         dict: {"content": str, "trace_id": str}
-    """
-    """
-    Process a chat message using the LangGraph agent.
-    
-    Args:
-        job_id: Unique job identifier
-        question: User's question to answer
-        user_id: Optional user ID for Langfuse tracking
     """
     try:
         # Create the agent graph
@@ -424,9 +417,36 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
         langfuse_handler = create_langfuse_handler()
         langfuse_metadata = get_langfuse_metadata(job_id, user_id)
         
+        # Initialize messages list
+        initial_messages = []
+        
+        # Load history if chat_id is provided
+        if chat_id:
+             try:
+                 from db import get_recent_chat_messages
+                 history_items = get_recent_chat_messages(chat_id, limit=20)
+                 for item in history_items:
+                     role = item.get('role')
+                     content = item.get('content')
+                     if role == 'user':
+                         initial_messages.append(HumanMessage(content=content))
+                     elif role == 'agent':
+                         initial_messages.append(AIMessage(content=content))
+                 
+                 # Deduplicate: if the last message matches the current question, remove it
+                 # This handles the case where the question was already saved to DB being picked up
+                 if initial_messages and isinstance(initial_messages[-1], HumanMessage) and initial_messages[-1].content == question:
+                     initial_messages.pop()
+                     
+             except Exception as e:
+                 print(f"Error loading chat history: {e}")
+
+        # Add current question
+        initial_messages.append(HumanMessage(content=question))
+        
         # Initialize state with the user's question
         initial_state = {
-            "messages": [HumanMessage(content=question)],
+            "messages": initial_messages,
             "job_id": job_id,
             "dataframe_info": "",
             "final_answer": ""
@@ -476,7 +496,7 @@ def process_chat(job_id: str, question: str, user_id: str = None) -> dict:
 
 # ============== Streaming Support ==============
 
-async def process_chat_stream(job_id: str, question: str, user_id: str = None):
+async def process_chat_stream(job_id: str, question: str, user_id: str = None, chat_id: str = None):
     """
     Process a chat message using the LangGraph agent with streaming.
     Yields chunks of the response as they are generated.
@@ -485,6 +505,7 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
         job_id: Unique job identifier
         question: User's question to answer
         user_id: Optional user ID for Langfuse tracking
+        chat_id: Optional chat ID to load history
     """
     try:
         # Create the agent graph
@@ -494,9 +515,35 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None):
         langfuse_handler = create_langfuse_handler()
         langfuse_metadata = get_langfuse_metadata(job_id, user_id)
         
+        # Initialize messages list
+        initial_messages = []
+        
+        # Load history if chat_id is provided
+        if chat_id:
+             try:
+                 from db import get_recent_chat_messages
+                 history_items = get_recent_chat_messages(chat_id, limit=20)
+                 for item in history_items:
+                     role = item.get('role')
+                     content = item.get('content')
+                     if role == 'user':
+                         initial_messages.append(HumanMessage(content=content))
+                     elif role == 'agent':
+                         initial_messages.append(AIMessage(content=content))
+                 
+                 # Deduplicate: if the last message matches the current question, remove it, since we'll add it explicitly
+                 if initial_messages and isinstance(initial_messages[-1], HumanMessage) and initial_messages[-1].content == question:
+                     initial_messages.pop()
+                     
+             except Exception as e:
+                 print(f"Error loading chat history: {e}")
+
+        # Add current question
+        initial_messages.append(HumanMessage(content=question))
+        
         # Initialize state
         initial_state = {
-            "messages": [HumanMessage(content=question)],
+            "messages": initial_messages,
             "job_id": job_id,
             "dataframe_info": "",
             "final_answer": ""
