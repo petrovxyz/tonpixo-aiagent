@@ -101,18 +101,22 @@ export default function HistoryPage() {
     }
 
     const formatDate = (dateString: string) => {
-        const date = new Date(dateString)
+        // Backend sends UTC timestamps without 'Z' suffix, so we need to add it
+        // to ensure JavaScript correctly parses it as UTC
+        const utcString = dateString.endsWith('Z') ? dateString : dateString + 'Z'
+        const date = new Date(utcString)
         const now = new Date()
         const diff = now.getTime() - date.getTime()
 
-        // If less than 24 hours
+        // If less than 24 hours - show time in user's local timezone
         if (diff < 24 * 60 * 60 * 1000) {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
-        // If this year
+        // If this year - show month and day
         if (now.getFullYear() === date.getFullYear()) {
             return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
         }
+        // Otherwise show full date
         return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
     }
 
