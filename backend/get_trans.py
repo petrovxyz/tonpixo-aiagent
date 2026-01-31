@@ -645,14 +645,31 @@ def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, 
             if not events:
                 break
             
+            limit_reached = False
+            
             for event in events:
+                # Check limit before processing each event
+                if limit_events and len(all_data) >= limit_events:
+                    limit_reached = True
+                    break
+                
                 parsed_actions = parse_event(event, account_id, labels_map)
                 all_data.extend(parsed_actions)
+                
+                # Check again after adding actions (an event can have multiple actions)
+                if limit_events and len(all_data) >= limit_events:
+                    limit_reached = True
+                    break
             
             print(f"   Fetched batch of {len(events)} events. Total actions so far: {len(all_data)}")
             
             if on_progress:
                 on_progress(len(all_data))
+            
+            # Check if we've reached the user's limit (break out of main loop)
+            if limit_reached:
+                print(f"   Reached transaction limit of {limit_events}")
+                is_complete = True
             
             # Get next_from for pagination
             next_from = data.get('next_from')
@@ -662,11 +679,6 @@ def fetch_history(account_id, api_key=None, limit_events=None, labels_map=None, 
                 is_complete = True
             
             if len(events) < 100:
-                is_complete = True
-            
-            # Check if we've reached the user's limit
-            if limit_events and len(all_data) >= limit_events:
-                print(f"   Reached event limit of {limit_events}")
                 is_complete = True
             
             time.sleep(0.2)  # Rate limit protection
