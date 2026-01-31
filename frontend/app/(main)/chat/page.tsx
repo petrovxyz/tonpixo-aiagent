@@ -1003,15 +1003,18 @@ function ChatContent() {
                             animate={true}
                         />
                     ),
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    isSystemMessage: true
                 }
 
+                console.log(`[CHAT] Constructing globalPendingMessages with 2 items`)
                 globalPendingMessages = [
-                    ...messages.filter(m => m.id !== loadingId), // Remove loading message from history
+                    // We know the first message is the user search "Search: <address>"
+                    // We reconstruct it here because captured 'messages' might be empty in this closure
                     {
                         id: Date.now().toString(),
                         role: "user" as const,
-                        content: `Address: ${address}`,
+                        content: `Search: ${address}`,
                         timestamp: new Date()
                     },
                     resultMessage
@@ -1042,9 +1045,10 @@ function ChatContent() {
                         })
 
                         // 2. Save user message (the address they entered)
+                        // Note: Backend expects "Address: " or "Search: " - consistent with UI
                         await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                             role: "user",
-                            content: `Address: ${address}`
+                            content: `Search: ${address}`
                         })
 
                         // 3. Save agent response as JSON
@@ -1527,7 +1531,7 @@ function ChatContent() {
                 const isResult = lastMsg?.content?.type === AddressDetailsMessage
 
                 if (isResult) {
-                    console.log(`[CHAT] Restoring finished result for ${chatIdParam}`)
+                    console.log(`[CHAT] Restoring finished result for ${chatIdParam}. Items: ${globalPendingMessages.length}`)
                     setMessages(globalPendingMessages)
                     activeSessionRef.current = true
                     historyLoadedRef.current = chatIdParam
