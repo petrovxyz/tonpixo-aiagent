@@ -311,6 +311,16 @@ IMPORTANT SQL RULES:
 3. Use simple, standard ANSI SQL (Presto/Trino dialect).
 4. Limit your results when selecting many rows (e.g., LIMIT 20).
 
+SERVICE IDENTIFICATION STRATEGY:
+If the user asks about a specific service (e.g., "Fragment", "CryptoBot", "Ston.fi", "Wallet" etc.) and you do NOT have a specific wallet address for it:
+    - Do NOT just say "I don't know the address".
+    - Instead, try to filter using the `label` column in the `transactions` table.
+    - ALWAYS use case-insensitive fuzzy matching: `lower(label) LIKE '%service_name%'`.
+    Example: User asks "How much did I spend on Fragment?". 
+    Query: `SELECT sum(amount) FROM transactions WHERE job_id = '...' AND lower(label) LIKE '%fragment%'`.
+    - If `label` is likely empty, check `comment` as a fallback:
+    Query: `... WHERE (lower(label) LIKE '%name%' OR lower(comment) LIKE '%name%') ...`
+
 Workflow:
 1. Think about the SQL query needed to answer the question.
 2. Execute the query.
