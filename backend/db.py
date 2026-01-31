@@ -233,3 +233,87 @@ def get_chat(chat_id: str):
     except ClientError as e:
         print(f"Error fetching chat {chat_id}: {e}")
         return None
+
+# ========== FAVOURITES ==========
+
+FAVOURITES_TABLE_NAME = os.environ.get('FAVOURITES_TABLE')
+
+def get_favourites_table():
+    return dynamodb.Table(FAVOURITES_TABLE_NAME)
+
+def save_favourite(user_id: int, address: str, name: str = None):
+    """
+    Add an address to user's favourites.
+    """
+    if not FAVOURITES_TABLE_NAME:
+        print("FAVOURITES_TABLE is not set")
+        return None
+
+    try:
+        table = get_favourites_table()
+        timestamp = datetime.utcnow().isoformat()
+        
+        item = {
+            'user_id': str(user_id),
+            'address': address,
+            'created_at': timestamp,
+        }
+        if name:
+            item['name'] = name
+            
+        table.put_item(Item=item)
+        print(f"Favourite {address} saved for user {user_id}")
+        return address
+    except ClientError as e:
+        print(f"Error saving favourite: {e}")
+        return None
+
+def remove_favourite(user_id: int, address: str):
+    """
+    Remove an address from user's favourites.
+    """
+    if not FAVOURITES_TABLE_NAME:
+        print("FAVOURITES_TABLE is not set")
+        return False
+
+    try:
+        table = get_favourites_table()
+        table.delete_item(Key={'user_id': str(user_id), 'address': address})
+        print(f"Favourite {address} removed for user {user_id}")
+        return True
+    except ClientError as e:
+        print(f"Error removing favourite: {e}")
+        return False
+
+def get_user_favourites(user_id: int, limit: int = 50):
+    """
+    Get all favourites for a user.
+    """
+    if not FAVOURITES_TABLE_NAME:
+        return []
+
+    try:
+        table = get_favourites_table()
+        response = table.query(
+            KeyConditionExpression=Key('user_id').eq(str(user_id)),
+            Limit=limit
+        )
+        return response.get('Items', [])
+    except ClientError as e:
+        print(f"Error fetching favourites for user {user_id}: {e}")
+        return []
+
+def is_favourite(user_id: int, address: str):
+    """
+    Check if an address is in user's favourites.
+    """
+    if not FAVOURITES_TABLE_NAME:
+        return False
+
+    try:
+        table = get_favourites_table()
+        response = table.get_item(Key={'user_id': str(user_id), 'address': address})
+        return 'Item' in response
+    except ClientError as e:
+        print(f"Error checking favourite: {e}")
+        return False

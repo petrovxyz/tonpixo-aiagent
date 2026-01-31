@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
-from db import save_chat, save_message, get_user_chats, get_chat_messages, get_chat
+from db import save_chat, save_message, get_user_chats, get_chat_messages, get_chat, save_favourite, remove_favourite, get_user_favourites, is_favourite
 
 app = FastAPI()
 
@@ -542,6 +542,61 @@ async def score_trace(request: ScoreRequest):
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+
+# ========== FAVOURITES ENDPOINTS ==========
+
+class FavouriteRequest(BaseModel):
+    user_id: int
+    address: str
+    name: str | None = None
+
+@app.post("/api/favourites")
+async def add_favourite(request: FavouriteRequest):
+    """Add an address to user's favourites."""
+    print(f"[FAVOURITES] Adding {request.address} for user {request.user_id}")
+    try:
+        result = save_favourite(request.user_id, request.address, request.name)
+        if result:
+            return {"status": "ok", "address": result}
+        return {"status": "error", "message": "Failed to save favourite"}
+    except Exception as e:
+        print(f"[FAVOURITES] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/api/favourites/{address}")
+async def delete_favourite(address: str, user_id: int):
+    """Remove an address from user's favourites."""
+    print(f"[FAVOURITES] Removing {address} for user {user_id}")
+    try:
+        result = remove_favourite(user_id, address)
+        if result:
+            return {"status": "ok"}
+        return {"status": "error", "message": "Failed to remove favourite"}
+    except Exception as e:
+        print(f"[FAVOURITES] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/favourites")
+async def list_favourites(user_id: int, limit: int = 50):
+    """Get all favourites for a user."""
+    print(f"[FAVOURITES] Listing for user {user_id}")
+    try:
+        favourites = get_user_favourites(user_id, limit)
+        return {"favourites": favourites, "count": len(favourites)}
+    except Exception as e:
+        print(f"[FAVOURITES] Error: {e}")
+        return {"favourites": [], "count": 0, "error": str(e)}
+
+@app.get("/api/favourites/check/{address}")
+async def check_favourite(address: str, user_id: int):
+    """Check if an address is in user's favourites."""
+    try:
+        is_fav = is_favourite(user_id, address)
+        return {"is_favourite": is_fav}
+    except Exception as e:
+        print(f"[FAVOURITES] Error: {e}")
+        return {"is_favourite": False, "error": str(e)}
 
 
 # Lambda Web Adapter: Run FastAPI with uvicorn

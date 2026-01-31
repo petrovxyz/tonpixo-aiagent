@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy } from "@fortawesome/free-solid-svg-icons"
+import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faStar as faStarSolid } from "@fortawesome/free-solid-svg-icons"
+import { faStar as faStarOutline } from "@fortawesome/free-regular-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
@@ -441,6 +442,8 @@ function ChatContent() {
     const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [pendingAddress, setPendingAddress] = useState<string | null>(null)
     const [currentScanType, setCurrentScanType] = useState<string | null>(null)
+    const [isFavourite, setIsFavourite] = useState(false)
+    const [currentAddress, setCurrentAddress] = useState<string | null>(null)
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -495,6 +498,61 @@ function ChatContent() {
             }
         }
     }, [])
+
+    // Check favourite status when address changes
+    useEffect(() => {
+        const checkFavourite = async () => {
+            const addressToCheck = currentAddress || pendingAddress || addressParam
+            if (!addressToCheck || !user?.id) {
+                setIsFavourite(false)
+                return
+            }
+
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                const response = await axios.get(`${apiUrl}/api/favourites/check/${encodeURIComponent(addressToCheck)}`, {
+                    params: { user_id: user.id }
+                })
+                setIsFavourite(response.data.is_favourite || false)
+            } catch (err) {
+                console.error('Error checking favourite:', err)
+                setIsFavourite(false)
+            }
+        }
+
+        checkFavourite()
+    }, [currentAddress, pendingAddress, addressParam, user?.id])
+
+    // Toggle favourite handler
+    const handleToggleFavourite = async () => {
+        const addressToToggle = currentAddress || pendingAddress || addressParam
+        if (!addressToToggle || !user?.id) {
+            showToast("No address to favourite", "error")
+            return
+        }
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+
+        try {
+            if (isFavourite) {
+                await axios.delete(`${apiUrl}/api/favourites/${encodeURIComponent(addressToToggle)}`, {
+                    params: { user_id: user.id }
+                })
+                setIsFavourite(false)
+                showToast("Removed from favourites", "success")
+            } else {
+                await axios.post(`${apiUrl}/api/favourites`, {
+                    user_id: user.id,
+                    address: addressToToggle
+                })
+                setIsFavourite(true)
+                showToast("Added to favourites", "success")
+            }
+        } catch (err) {
+            console.error('Error toggling favourite:', err)
+            showToast("Failed to update favourite", "error")
+        }
+    }
 
     // Ref to track if history has been loaded to prevent duplicate loads
     const historyLoadedRef = useRef<string | null>(null)
@@ -776,6 +834,7 @@ function ChatContent() {
     // Handle address detection and show acknowledgment
     const handleAddressReceived = async (address: string) => {
         setPendingAddress(address)
+        setCurrentAddress(address)
 
         // Show loading state for wallet info
         const loadingId = Math.random().toString(36).substr(2, 9)
@@ -1356,7 +1415,17 @@ function ChatContent() {
                             <FontAwesomeIcon icon={faArrowLeft} className="text-xl" />
                         </button>
                         <Header className="flex-1" />
-                        <div className="w-14 h-14" />
+                        <button
+                            onClick={handleToggleFavourite}
+                            disabled={!currentAddress && !pendingAddress && !addressParam}
+                            className={cn(
+                                "flex items-center justify-center w-14 h-14 bg-[#4FC3F7] border-2 border-white/20 rounded-full hover:bg-[#67cbf8] transition-all shadow-lg active:scale-95 inset-shadow-sm inset-shadow-white/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+                                isMobile ? "mt-24" : "mt-10",
+                                isFavourite ? "text-white" : "text-black"
+                            )}
+                        >
+                            <FontAwesomeIcon icon={isFavourite ? faStarSolid : faStarOutline} className="text-xl" />
+                        </button>
                     </div>
                 </div>
             </div>

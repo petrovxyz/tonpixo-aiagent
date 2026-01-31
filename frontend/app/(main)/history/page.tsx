@@ -139,7 +139,7 @@ export default function HistoryPage() {
                 className="flex items-center gap-3 py-2 mb-4"
             >
                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/10">
-                    <FontAwesomeIcon icon={faClock} className="text-white text-lg font-medium" />
+                    <FontAwesomeIcon icon={faClock} className="text-white text-lg" />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">History</h1>
@@ -241,7 +241,7 @@ export default function HistoryPage() {
                                                     chat.title || "New Chat"
                                                 )}
                                             </p>
-                                            <span className="text-white/35 text-xs">
+                                            <span className="text-white/50 font-medium text-xs">
                                                 {formatDate(chat.updated_at)}
                                             </span>
                                         </div>

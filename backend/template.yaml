@@ -88,6 +88,7 @@ Resources:
           USERS_TABLE: !Ref UsersTable
           CHATS_TABLE: !Ref ChatsTable
           MESSAGES_TABLE: !Ref MessagesTable
+          FAVOURITES_TABLE: !Ref FavouritesTable
           JOBS_QUEUE_URL: !Ref JobsQueue
           DATA_BUCKET: !Ref DataBucket
           SECRET_NAME: !Ref AppSecrets
@@ -107,6 +108,8 @@ Resources:
             TableName: !Ref ChatsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MessagesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FavouritesTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt JobsQueue.QueueName
         - S3ReadPolicy:
@@ -388,6 +391,22 @@ Resources:
         - AttributeName: chat_id
           KeyType: HASH
         - AttributeName: created_at
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  FavouritesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-favourites"
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: address
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: address
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
