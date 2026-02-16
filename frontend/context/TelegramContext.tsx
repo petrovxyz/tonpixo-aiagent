@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { retrieveLaunchParams } from "@tma.js/sdk"
 import axios from "axios"
+import { getApiUrl } from "@/lib/backendUrl"
 
 declare global {
     interface Window {
@@ -57,7 +58,11 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
         if (!initDataRaw) return
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
+            if (!apiUrl) {
+                console.error("[TG] Backend API URL is not configured for this environment")
+                return
+            }
             await axios.post(`${apiUrl}/api/login`, {
                 initData: initDataRaw
             })
@@ -152,7 +157,12 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                     })
 
                     if (raw) {
-                        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                        const apiUrl = getApiUrl()
+                        if (!apiUrl) {
+                            console.error("[TG] Backend API URL is not configured for this environment")
+                            setError("Backend URL is not configured. Contact support.")
+                            return
+                        }
                         console.log("[TG] Sending login request to:", `${apiUrl}/api/login`)
 
                         try {

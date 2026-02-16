@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faMessage, faSpinner, faChevronRight, faClock, faWallet } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
+import { getApiUrl } from "@/lib/backendUrl"
 
 interface ChatSession {
     chat_id: string
@@ -31,7 +32,7 @@ export default function HistoryPage() {
         if (!user?.id) return
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             const params: { user_id: number; limit: number; last_key?: string } = {
                 user_id: user.id,
                 limit: 10

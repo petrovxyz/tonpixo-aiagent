@@ -37,6 +37,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const runtimeBackendConfig = {
+    apiUrl: process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "",
+    streamUrl:
+      process.env.BACKEND_STREAM_URL ||
+      process.env.NEXT_PUBLIC_STREAM_URL ||
+      process.env.BACKEND_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "",
+  };
+
+  const runtimeBackendConfigScript = `window.__TONPIXO_BACKEND_CONFIG__=${JSON.stringify(runtimeBackendConfig).replace(/</g, "\\u003c")};`;
+
   return (
     <html lang="en">
       <body
@@ -44,6 +56,7 @@ export default function RootLayout({
       >
         {/* Persistent Background to prevent black blinks */}
         <div className="fixed inset-0 bg-gradient-to-br from-[#4FC3F7] to-[#29B6F6] -z-10" />
+        <script dangerouslySetInnerHTML={{ __html: runtimeBackendConfigScript }} />
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <TelegramProvider>
           <UIProvider>

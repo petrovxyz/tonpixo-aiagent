@@ -156,9 +156,18 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
 1.  Create a `.env.local` file in the `frontend` folder or specify the environment variables in the Vercel / AWS Amplify console.
 2.  Add your backend URL:
     ```env
+    BACKEND_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
+    BACKEND_STREAM_URL=https://your-function-id.lambda-url.region.on.aws
+    NEXT_PUBLIC_MAIN_API_URL=https://main-api-id.execute-api.region.amazonaws.com/Prod
+    NEXT_PUBLIC_MAIN_STREAM_URL=https://main-function-id.lambda-url.region.on.aws
+    NEXT_PUBLIC_DEV_API_URL=https://dev-api-id.execute-api.region.amazonaws.com/Prod
+    NEXT_PUBLIC_DEV_STREAM_URL=https://dev-function-id.lambda-url.region.on.aws
     NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
     AMPLIFY_MONOREPO_APP_ROOT=frontend
     ```
+    You can also try to use `BACKEND_API_URL` and `BACKEND_STREAM_URL` as branch-specific secrets (`main` and `dev` values differ).
+    If branch-scoped env vars are unavailable, set `NEXT_PUBLIC_MAIN_*` and `NEXT_PUBLIC_DEV_*` once (global app env vars). The app auto-selects by hostname (`main.*` vs `dev.*`).
+    `NEXT_PUBLIC_API_URL` is only a generic fallback for local or non-branch-specific hosting.
 3.  Deploy requests to Vercel, AWS Amplify, or any static hosting provider.
     ```bash
     cd frontend
