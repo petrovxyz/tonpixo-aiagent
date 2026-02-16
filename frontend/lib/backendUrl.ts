@@ -1,15 +1,6 @@
+import type { RuntimeBackendConfig } from "./runtimeConfig"
+
 const LOCAL_DEFAULT_API_URL = "http://127.0.0.1:8000"
-
-type RuntimeBackendConfig = {
-    apiUrl?: string
-    streamUrl?: string
-}
-
-declare global {
-    interface Window {
-        __TONPIXO_BACKEND_CONFIG__?: RuntimeBackendConfig
-    }
-}
 
 type DeployTarget = "dev" | "main" | null
 

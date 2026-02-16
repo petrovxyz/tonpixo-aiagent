@@ -45,6 +45,10 @@ export default function RootLayout({
       process.env.BACKEND_API_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
       "",
+    assetsBaseUrl:
+      process.env.ASSETS_BASE_URL ||
+      process.env.NEXT_PUBLIC_ASSETS_BASE_URL ||
+      "",
   };
 
   const runtimeBackendConfigScript = `window.__TONPIXO_BACKEND_CONFIG__=${JSON.stringify(runtimeBackendConfig).replace(/</g, "\\u003c")};`;

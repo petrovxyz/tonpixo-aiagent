@@ -118,6 +118,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                             src={slides[index].image}
                             alt={slides[index].title}
                             fill
+                            sizes="(max-width: 672px) 100vw, 672px"
                             className="object-cover"
                             priority
                             draggable={false}

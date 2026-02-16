@@ -85,6 +85,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                             src={item.image}
                             alt={item.question}
                             fill
+                            sizes="(max-width: 512px) 100vw, 512px"
                             className="object-cover"
                             unoptimized
                         />

@@ -37,6 +37,7 @@ Parameters:
 
 Conditions:
   IsDevProfile: !Equals [!Ref DeploymentProfile, dev]
+  IsMainProfile: !Equals [!Ref DeploymentProfile, main]
 
 Globals:
   Function:
@@ -136,6 +137,11 @@ Resources:
           # Langfuse configuration
           LANGFUSE_TRACING_ENVIRONMENT: !Sub "${AWS::StackName}"
           DEPLOYMENT_PROFILE: !Ref DeploymentProfile
+          # Assets configuration
+          ASSETS_BUCKET: !Sub "tonpixo-assets-${AWS::AccountId}-${AWS::Region}"
+          ASSETS_BASE_URL: !Sub "https://tonpixo-assets-${AWS::AccountId}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/assets"
+          ASSETS_PREFIX: assets
+          ASSET_MAX_SIZE_MB: 5
           # Matplotlib config - use /tmp for cache (Lambda requirement)
           MPLCONFIGDIR: /tmp/matplotlib
       Policies:
@@ -155,6 +161,16 @@ Resources:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
             BucketName: !Ref DataBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:AbortMultipartUpload
+              Resource: !Sub "arn:aws:s3:::tonpixo-assets-${AWS::AccountId}-${AWS::Region}/assets/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucketMultipartUploads
+              Resource: !Sub "arn:aws:s3:::tonpixo-assets-${AWS::AccountId}-${AWS::Region}"
         - Statement:
             - Effect: Allow
               Action:
@@ -231,6 +247,52 @@ Resources:
 
   DataBucket:
     Type: AWS::S3::Bucket
+
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsMainProfile
+    Properties:
+      BucketName: !Sub "tonpixo-assets-${AWS::AccountId}-${AWS::Region}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+              - HEAD
+              - POST
+            AllowedOrigins:
+              - "*"
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3000
+
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsMainProfile
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadAssets
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub "arn:aws:s3:::tonpixo-assets-${AWS::AccountId}-${AWS::Region}/assets/*"
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
@@ -456,3 +518,11 @@ Outputs:
   FunctionUrl:
     Description: "Lambda Function URL (use for streaming chat)"
     Value: !GetAtt FastApiFunctionUrl.FunctionUrl
+  AssetsBucketName:
+    Condition: IsMainProfile
+    Description: "Shared assets bucket name"
+    Value: !Sub "tonpixo-assets-${AWS::AccountId}-${AWS::Region}"
+  AssetsBaseUrl:
+    Condition: IsMainProfile
+    Description: "Shared assets base URL"
+    Value: !Sub "https://tonpixo-assets-${AWS::AccountId}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/assets"

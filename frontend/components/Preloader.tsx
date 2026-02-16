@@ -7,6 +7,7 @@ import { useUI } from "@/context/UIContext"
 import { useTelegram } from "@/context/TelegramContext"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons"
+import { getAssetUrl } from "@/lib/assetsUrl"
 
 export default function Preloader() {
     const { isInitialLoading, setIsInitialLoading } = useUI()
@@ -47,9 +48,10 @@ export default function Preloader() {
                     className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
                 >
                     <Image
-                        src="/images/preloader.webp"
+                        src={getAssetUrl("images/preloader.webp")}
                         alt="Preloader background"
                         fill
+                        sizes="100vw"
                         className="object-cover"
                         priority
                     />
@@ -73,9 +75,10 @@ export default function Preloader() {
                         >
                             <div className="relative w-12 h-12">
                                 <Image
-                                    src="/logo.svg"
+                                    src={getAssetUrl("logo.svg")}
                                     alt="Tonpixo logo"
                                     fill
+                                    sizes="48px"
                                     className="object-contain"
                                     priority
                                 />
