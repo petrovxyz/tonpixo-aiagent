@@ -165,7 +165,7 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
     NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
     AMPLIFY_MONOREPO_APP_ROOT=frontend
     ```
-    In Amplify, use `BACKEND_API_URL` and `BACKEND_STREAM_URL` as branch-specific secrets (`main` and `dev` values differ).
+    You can also try to use `BACKEND_API_URL` and `BACKEND_STREAM_URL` as branch-specific secrets (`main` and `dev` values differ).
     If branch-scoped env vars are unavailable, set `NEXT_PUBLIC_MAIN_*` and `NEXT_PUBLIC_DEV_*` once (global app env vars). The app auto-selects by hostname (`main.*` vs `dev.*`).
     `NEXT_PUBLIC_API_URL` is only a generic fallback for local or non-branch-specific hosting.
 3.  Deploy requests to Vercel, AWS Amplify, or any static hosting provider.
