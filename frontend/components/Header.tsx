@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
 import { getAssetUrl } from "@/lib/assetsUrl"
+import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
 
 export function Header({ className }: { className?: string }) {
     const { user, isMobile } = useTelegram()
@@ -19,7 +20,16 @@ export function Header({ className }: { className?: string }) {
                     layout
                     className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white/30 shadow-lg pointer-events-auto"
                 >
-                    <Image src={user?.photo_url || ""} alt="User" fill sizes="56px" className="object-cover" unoptimized />
+                    <Image
+                        src={user?.photo_url || ""}
+                        alt="User"
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                        placeholder="blur"
+                        blurDataURL={DEFAULT_BLUR_DATA_URL}
+                        unoptimized
+                    />
                 </motion.div>
             )}
 
@@ -29,7 +39,15 @@ export function Header({ className }: { className?: string }) {
             >
                 <div className="flex items-center gap-2 text-[26px] font-extrabold font-sans tracking-tight px-6">
                     <div className="relative w-8 h-8">
-                        <Image src={getAssetUrl("logo.svg")} alt="Tonpixo Logo" fill sizes="32px" className="object-contain" />
+                        <Image
+                            src={getAssetUrl("logo.svg")}
+                            alt="Tonpixo Logo"
+                            fill
+                            sizes="32px"
+                            className="object-contain"
+                            placeholder="blur"
+                            blurDataURL={DEFAULT_BLUR_DATA_URL}
+                        />
                     </div>
                     <span className="text-black">tonpixo</span>
                 </div>

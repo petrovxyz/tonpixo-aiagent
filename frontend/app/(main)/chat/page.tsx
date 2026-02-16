@@ -16,6 +16,7 @@ import { getApiUrl, getStreamUrl } from "@/lib/backendUrl"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 import { getAssetUrl } from "@/lib/assetsUrl"
+import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
 
 // Global lock to prevent duplicate address processing across component remounts
 let globalProcessingAddress: string | null = null
@@ -316,7 +317,15 @@ const MessageBubble = ({
         >
             {role === "agent" && (
                 <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    <Image src={getAssetUrl("logo.svg")} alt="Agent" width={24} height={24} className="object-contain" />
+                    <Image
+                        src={getAssetUrl("logo.svg")}
+                        alt="Agent"
+                        width={24}
+                        height={24}
+                        className="object-contain"
+                        placeholder="blur"
+                        blurDataURL={DEFAULT_BLUR_DATA_URL}
+                    />
                 </div>
             )}
             {role === "user" && (

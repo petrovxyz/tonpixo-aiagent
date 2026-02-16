@@ -6,6 +6,7 @@ import Image from "next/image"
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faArrowUp } from "@fortawesome/free-solid-svg-icons"
+import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
 
 type Slide = {
     id: string
@@ -120,7 +121,10 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                             fill
                             sizes="(max-width: 672px) 100vw, 672px"
                             className="object-cover"
-                            priority
+                            priority={index === 0}
+                            loading={index === 0 ? "eager" : "lazy"}
+                            placeholder="blur"
+                            blurDataURL={DEFAULT_BLUR_DATA_URL}
                             draggable={false}
                         />
 

@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { ChartRenderer } from './ChartRenderer'
+import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
 
 interface MarkdownRendererProps {
     content: string
@@ -296,6 +297,9 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
                     sizes="100vw"
                     style={{ width: '100%', height: 'auto' }}
                     className="rounded-lg my-3"
+                    loading="lazy"
+                    placeholder="blur"
+                    blurDataURL={DEFAULT_BLUR_DATA_URL}
                     unoptimized
                 />
             )
