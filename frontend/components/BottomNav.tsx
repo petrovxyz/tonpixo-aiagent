@@ -20,7 +20,7 @@ export function BottomNav() {
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
 
     return (
-        <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
+        <div id="bottom-nav" className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
             <div
                 onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();

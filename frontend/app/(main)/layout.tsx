@@ -1,6 +1,7 @@
 "use client"
 
 import { BottomNav } from "@/components/BottomNav"
+import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner"
 import { Header } from "@/components/Header"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
@@ -91,6 +92,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                     </motion.div>
                 </AnimatePresence>
             </div>
+
+            <PrivacyConsentBanner />
 
             {!isChatPage && (
                 <motion.div
