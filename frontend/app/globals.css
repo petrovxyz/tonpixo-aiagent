@@ -21,6 +21,17 @@ body {
   overflow-x: hidden;
 }
 
+img {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
 .image-frame {
   --shimmer-bg: rgba(255, 255, 255, 0.08);
   --shimmer-from: rgba(255, 255, 255, 0.05);

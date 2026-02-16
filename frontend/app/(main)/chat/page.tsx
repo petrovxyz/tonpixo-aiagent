@@ -1722,7 +1722,7 @@ function ChatContent() {
             </div>
 
             {/* Input Area */}
-            <div className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">
+            <div id="chat-input-bar" className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">
                 {/* Backdrop */}
                 <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#29B6F6]/80 via-[#29B6F6]/40 to-transparent -z-10" />
 
