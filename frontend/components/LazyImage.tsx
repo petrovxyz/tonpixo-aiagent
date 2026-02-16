@@ -14,7 +14,7 @@ export function LazyImage({
     wrapperClassName,
     wrapperStyle: externalWrapperStyle,
     className,
-    onLoadingComplete,
+    onLoad,
     loading,
     minShimmerMs = 220,
     ...props
@@ -60,13 +60,15 @@ export function LazyImage({
                 {...props}
                 loading={resolvedLoading}
                 className={cn("image-element", className)}
-                onLoadingComplete={(img) => {
+                onLoad={(e) => {
+                    const img = e.currentTarget as HTMLImageElement
+                    if (img.naturalWidth === 0) return
                     const elapsed = Date.now() - mountTimeRef.current
                     const delay = Math.max(0, minShimmerMs - elapsed)
                     timeoutRef.current = window.setTimeout(() => {
                         setLoaded(true)
                     }, delay)
-                    onLoadingComplete?.(img)
+                    onLoad?.(e)
                 }}
             />
         </span>
