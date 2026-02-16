@@ -136,43 +136,114 @@ You will be prompted to enter parameters. Have the following ready:
 
 ### 3. Subsequent deployments
 
-For future updates, use the profile-specific commands below. They build the container and deploy using saved profile configuration.
+For future updates, **`--guided` is not needed** — parameters are already saved in `samconfig.toml`.
 
+**Build once** (both stacks share the same code):
 ```bash
-sam build --use-container && sam deploy --config-env main --resolve-image-repos --no-confirm-changeset
-sam build --use-container && sam deploy --config-env dev --resolve-image-repos --no-confirm-changeset
+sam build --use-container
+```
+
+**Deploy to each environment separately:**
+```bash
+sam deploy --config-env dev --resolve-image-repos --no-confirm-changeset
+sam deploy --config-env main --resolve-image-repos --no-confirm-changeset
+```
+
+Or as a single one-liner (build once, deploy both):
+```bash
+sam build --use-container && sam deploy --config-env dev --resolve-image-repos --no-confirm-changeset && sam deploy --config-env main --resolve-image-repos --no-confirm-changeset
 ```
 
 **Command breakdown:**
-*   `sam build --use-container`: builds the application using a Docker container to ensure compatibility with AWS Lambda.
+*   `sam build --use-container`: builds the Docker images. Only needs to run once since both stacks use the same code.
 *   `--config-env main|dev`: picks the matching profile from `samconfig.toml` (`tonpixo-main` or `tonpixo-dev` stack and `DeploymentProfile`).
 *   `--resolve-image-repos`: automatically creates and manages ECR repositories for your Docker images.
 *   `--no-confirm-changeset`: deploys immediately without waiting for manual confirmation of the changeset.
 
 ### 4. Deploying the frontend
 
-After the backend is deployed, SAM will output the `FunctionUrl`. You need to configure this in your frontend.
+After the backend is deployed, SAM outputs two URLs per stack:
 
-1.  Create a `.env.local` file in the `frontend` folder or specify the environment variables in the Vercel / AWS Amplify console.
-2.  Add your backend URL:
-    ```env
-    BACKEND_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
-    BACKEND_STREAM_URL=https://your-function-id.lambda-url.region.on.aws
-    NEXT_PUBLIC_MAIN_API_URL=https://main-api-id.execute-api.region.amazonaws.com/Prod
-    NEXT_PUBLIC_MAIN_STREAM_URL=https://main-function-id.lambda-url.region.on.aws
-    NEXT_PUBLIC_DEV_API_URL=https://dev-api-id.execute-api.region.amazonaws.com/Prod
-    NEXT_PUBLIC_DEV_STREAM_URL=https://dev-function-id.lambda-url.region.on.aws
-    NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.region.amazonaws.com/Prod
-    AMPLIFY_MONOREPO_APP_ROOT=frontend
-    ```
-    You can also try to use `BACKEND_API_URL` and `BACKEND_STREAM_URL` as branch-specific secrets (`main` and `dev` values differ).
-    If branch-scoped env vars are unavailable, set `NEXT_PUBLIC_MAIN_*` and `NEXT_PUBLIC_DEV_*` once (global app env vars). The app auto-selects by hostname (`main.*` vs `dev.*`).
-    `NEXT_PUBLIC_API_URL` is only a generic fallback for local or non-branch-specific hosting.
-3.  Deploy requests to Vercel, AWS Amplify, or any static hosting provider.
-    ```bash
-    cd frontend
-    npm run build
-    ```
+| Output | Description |
+|--------|-------------|
+| `ApiUrl` | API Gateway endpoint (e.g. `https://xxx.execute-api.region.amazonaws.com/Prod/`) |
+| `FunctionUrl` | Lambda Function URL (e.g. `https://xxx.lambda-url.region.on.aws/`) |
+
+You can view them at any time:
+```bash
+aws cloudformation describe-stacks --stack-name tonpixo-dev --query 'Stacks[0].Outputs' --output table
+aws cloudformation describe-stacks --stack-name tonpixo-main --query 'Stacks[0].Outputs' --output table
+```
+
+> **⚠️ IMPORTANT: Always use the Lambda Function URL, NOT the API Gateway URL.**
+>
+> The backend uses AWS Lambda Web Adapter with `RESPONSE_STREAM` invoke mode for SSE streaming.
+> API Gateway does **not** support response streaming — requests sent to the API Gateway URL
+> will return **502 Bad Gateway** (which the browser masks as a CORS error).
+> Only the Lambda Function URL supports streaming responses correctly.
+
+#### Frontend environment variables
+
+The frontend resolves the backend URL using the following priority (first match wins):
+
+| Priority | Variable | When it's used |
+|----------|----------|----------------|
+| 1 | `window.__TONPIXO_BACKEND_CONFIG__` | Runtime config injected by `layout.tsx` (server-side) |
+| 2 | `NEXT_PUBLIC_DEV_API_URL` / `NEXT_PUBLIC_MAIN_API_URL` | Auto-selected by hostname (`dev.*` → dev, `main.*` → main) |
+| 3 | `NEXT_PUBLIC_API_URL` | Generic fallback for non-branch-specific hosting |
+| 4 | `http://127.0.0.1:8000` | Localhost fallback (only on `localhost` / `127.0.0.1`) |
+
+The same priority applies for the stream URL (`NEXT_PUBLIC_DEV_STREAM_URL`, `NEXT_PUBLIC_MAIN_STREAM_URL`, etc.).
+
+#### Option A: AWS Amplify (recommended)
+
+Set these as **app-level** environment variables in the Amplify console (or via CLI). The app auto-selects the correct URL by matching the hostname (`dev.*` → `DEV_*`, `main.*` → `MAIN_*`).
+
+```env
+# Required
+AMPLIFY_MONOREPO_APP_ROOT=frontend
+
+# Dev stack — use the FunctionUrl from tonpixo-dev stack output
+NEXT_PUBLIC_DEV_API_URL=https://<dev-function-id>.lambda-url.<region>.on.aws
+NEXT_PUBLIC_DEV_STREAM_URL=https://<dev-function-id>.lambda-url.<region>.on.aws
+
+# Main/prod stack — use the FunctionUrl from tonpixo-main stack output
+NEXT_PUBLIC_MAIN_API_URL=https://<main-function-id>.lambda-url.<region>.on.aws
+NEXT_PUBLIC_MAIN_STREAM_URL=https://<main-function-id>.lambda-url.<region>.on.aws
+```
+
+To set via CLI:
+```bash
+aws amplify update-app --app-id <YOUR_AMPLIFY_APP_ID> \
+  --environment-variables \
+  "AMPLIFY_MONOREPO_APP_ROOT=frontend,\
+   NEXT_PUBLIC_DEV_API_URL=https://<dev-function-id>.lambda-url.<region>.on.aws,\
+   NEXT_PUBLIC_DEV_STREAM_URL=https://<dev-function-id>.lambda-url.<region>.on.aws,\
+   NEXT_PUBLIC_MAIN_API_URL=https://<main-function-id>.lambda-url.<region>.on.aws,\
+   NEXT_PUBLIC_MAIN_STREAM_URL=https://<main-function-id>.lambda-url.<region>.on.aws" \
+  --region <region>
+```
+
+> **Note:** After updating env vars, you must trigger a new build for the changes to take effect:
+> ```bash
+> aws amplify start-job --app-id <APP_ID> --branch-name dev --job-type RELEASE --region <region>
+> aws amplify start-job --app-id <APP_ID> --branch-name main --job-type RELEASE --region <region>
+> ```
+
+#### Option B: Self-hosted / Vercel
+
+Create a `.env.local` file in the `frontend/` directory:
+
+```env
+# Point to whatever backend you want to use
+NEXT_PUBLIC_API_URL=https://<function-id>.lambda-url.<region>.on.aws
+```
+
+Then build and deploy:
+```bash
+cd frontend
+npm run build
+```
 
 ---
 
@@ -180,60 +251,82 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
 
 ### Backend
 
-Use separate env files per branch to avoid `TELEGRAM_BOT_TOKEN` conflicts:
+The backend uses **branch-aware env files** — it automatically detects your current Git branch and loads the corresponding file:
 
-```bash
-git checkout main
-cp backend/env.main.example backend/.env.main
+| Git branch | Env file loaded | Profile |
+|------------|----------------|---------|
+| `dev` / `development` | `.env.dev` | dev |
+| `main` / `master` | `.env.main` | main |
+| *(any other)* | `.env.local` → `.env` | fallback |
 
-git checkout dev
-cp backend/env.dev.example backend/.env.dev
-```
+You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV=main`.
 
-The backend auto-loads:
-- `.env.dev` on `dev` / `development` branch
-- `.env.main` on `main` / `master` branch
-- `.env.local`, then `.env` as fallback
+#### Setup steps
 
-You can force a profile manually with `TONPIXO_ENV=dev` or `TONPIXO_ENV=main`.
-
-1.  Navigate to `backend`:
+1.  Navigate to `backend/` and create a virtual environment:
     ```bash
     cd backend
-    ```
-2.  Create and activate a virtual environment:
-    ```bash
     python3 -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
-3.  Install dependencies:
+
+2.  Install dependencies:
     ```bash
     pip install -r requirements.txt
     ```
-4.  Create your branch-specific env file (`.env.dev` or `.env.main`) and fill keys (see `template.yaml` parameters).
-5.  Run the local server:
+
+3.  Create your env file (e.g. `.env.dev` for the `dev` branch):
+    ```env
+    # Telegram — use separate bots for dev/main to avoid webhook conflicts
+    TELEGRAM_BOT_TOKEN=<your-bot-token-for-this-branch>
+
+    # TON API — get a key from https://tonapi.io/
+    TONAPI_KEY=<your-tonapi-key>
+
+    # AWS — these are auto-set by SAM in Lambda, but needed locally
+    AWS_DEFAULT_REGION=us-east-1
+    JOBS_TABLE=tonpixo-dev-jobs
+    USERS_TABLE=tonpixo-dev-users
+    JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/<account-id>/<queue-name>
+    DATA_BUCKET=<your-data-bucket-name>
+
+    # Langfuse (optional) — get keys from https://cloud.langfuse.com
+    LANGFUSE_SECRET_KEY=sk-lf-...
+    LANGFUSE_PUBLIC_KEY=pk-lf-...
+    LANGFUSE_HOST=https://cloud.langfuse.com
+    LANGFUSE_TRACING_ENVIRONMENT=development
+    ```
+
+    > **Tip:** The DynamoDB table names and SQS queue URL are printed in the CloudFormation stack outputs.
+    > Run `aws cloudformation describe-stacks --stack-name tonpixo-dev` to find them.
+
+4.  Run the local server:
     ```bash
     python main.py
     ```
+    The server starts on `http://127.0.0.1:8080`. CORS middleware is automatically added when running locally (outside Lambda).
 
 ### Frontend
 
-1.  Navigate to `frontend`:
+1.  Navigate to `frontend/` and install dependencies:
     ```bash
     cd frontend
-    ```
-2.  Install dependencies:
-    ```bash
     npm install
-    # or
-    yarn install
     ```
+
+2.  Create `.env.local`:
+    ```env
+    # Points to local backend by default (http://localhost:8000)
+    # Override if you want to connect to a deployed backend instead:
+    # NEXT_PUBLIC_API_URL=https://<function-id>.lambda-url.<region>.on.aws
+    ```
+
 3.  Run the development server:
     ```bash
     npm run dev
     ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. Note that to test Telegram-specific features, you specifically need to open the app via the Telegram client.
+Open [http://localhost:3000](http://localhost:3000) to see the app. Note that Telegram-specific features (Mini App SDK, `initData`, etc.) only work when opened through the Telegram client.
 
 ---
 

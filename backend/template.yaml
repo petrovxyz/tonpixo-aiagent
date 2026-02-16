@@ -49,6 +49,27 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  # ── Gateway Responses: ensure CORS headers are present even on error (4xx/5xx) ──
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref ServerlessRestApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'*'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref ServerlessRestApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'*'"
+
   AppSecrets:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -113,7 +134,7 @@ Resources:
           ATHENA_WORKGROUP: !Ref AthenaWorkGroup
           GLUE_DATABASE: !Ref GlueDatabase
           # Langfuse configuration
-          LANGFUSE_TRACING_ENVIRONMENT: !Sub "${AWS::StackName}-${DeploymentProfile}"
+          LANGFUSE_TRACING_ENVIRONMENT: !Sub "${AWS::StackName}"
           DEPLOYMENT_PROFILE: !Ref DeploymentProfile
           # Matplotlib config - use /tmp for cache (Lambda requirement)
           MPLCONFIGDIR: /tmp/matplotlib
