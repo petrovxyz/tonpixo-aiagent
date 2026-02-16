@@ -3,13 +3,24 @@ Transform: AWS::Serverless-2016-10-31
 Description: FastAPI on AWS Lambda with LangGraph Agent
 
 Parameters:
+  DeploymentProfile:
+    Type: String
+    Description: "Deployment profile to select branch-specific secrets"
+    AllowedValues:
+      - main
+      - dev
+    Default: main
   TonApiKey:
     Type: String
     Description: "API Key from tonapi.io"
     NoEcho: true
-  TelegramBotToken:
+  TelegramBotTokenMain:
     Type: String
-    Description: "Token from BotFather"
+    Description: "Telegram Bot token for main branch deployments"
+    NoEcho: true
+  TelegramBotTokenDev:
+    Type: String
+    Description: "Telegram Bot token for dev branch deployments"
     NoEcho: true
   LangfuseSecretKey:
     Type: String
@@ -23,6 +34,9 @@ Parameters:
     Type: String
     Description: "Langfuse Host URL"
     Default: "https://cloud.langfuse.com"
+
+Conditions:
+  IsDevProfile: !Equals [!Ref DeploymentProfile, dev]
 
 Globals:
   Function:
@@ -39,7 +53,10 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: "Secrets for Tonpixo"
-      SecretString: !Sub '{"TONAPI_KEY":"${TonApiKey}","TELEGRAM_BOT_TOKEN":"${TelegramBotToken}","LANGFUSE_SECRET_KEY":"${LangfuseSecretKey}","LANGFUSE_PUBLIC_KEY":"${LangfusePublicKey}","LANGFUSE_HOST":"${LangfuseHost}"}'
+      SecretString:
+        Fn::Sub:
+          - '{"TONAPI_KEY":"${TonApiKey}","TELEGRAM_BOT_TOKEN":"${ResolvedTelegramBotToken}","LANGFUSE_SECRET_KEY":"${LangfuseSecretKey}","LANGFUSE_PUBLIC_KEY":"${LangfusePublicKey}","LANGFUSE_HOST":"${LangfuseHost}"}'
+          - ResolvedTelegramBotToken: !If [IsDevProfile, !Ref TelegramBotTokenDev, !Ref TelegramBotTokenMain]
 
   JobsQueue:
     Type: AWS::SQS::Queue
@@ -96,7 +113,8 @@ Resources:
           ATHENA_WORKGROUP: !Ref AthenaWorkGroup
           GLUE_DATABASE: !Ref GlueDatabase
           # Langfuse configuration
-          LANGFUSE_TRACING_ENVIRONMENT: !Ref "AWS::StackName"
+          LANGFUSE_TRACING_ENVIRONMENT: !Sub "${AWS::StackName}-${DeploymentProfile}"
+          DEPLOYMENT_PROFILE: !Ref DeploymentProfile
           # Matplotlib config - use /tmp for cache (Lambda requirement)
           MPLCONFIGDIR: /tmp/matplotlib
       Policies:

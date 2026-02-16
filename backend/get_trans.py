@@ -5,9 +5,10 @@ import base64
 
 import json
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from env_loader import load_project_env
+
+load_project_env()
 
 # Configuration
 LABELS_FILE = "labels/labels.json"

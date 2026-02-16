@@ -1,11 +1,11 @@
 import boto3
 import os
-from dotenv import load_dotenv
 
+from env_loader import load_project_env
 from utils import get_config_value
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from branch-aware env files.
+load_project_env()
 
 import uuid
 import json

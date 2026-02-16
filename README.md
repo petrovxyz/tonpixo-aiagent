@@ -114,17 +114,20 @@ sam build --use-container
 
 ### 2. Initial deployment
 
-If this is your **first time** deploying, run the guided deployment. This will help you set up the `samconfig.toml` file and save your configuration.
+If this is your **first time** deploying, run guided deployment once per profile. This will save profile-specific config in `samconfig.toml`.
 
 ```bash
-sam deploy --guided
+sam deploy --guided --config-env main
+sam deploy --guided --config-env dev
 ```
 
 You will be prompted to enter parameters. Have the following ready:
-*   **Stack Name**: `tonpixo` (or your preferred name)
+*   **Stack Name**: use separate stacks, e.g. `tonpixo-main` and `tonpixo-dev`
 *   **Region**: e.g., `us-east-1`
+*   **DeploymentProfile**: `main` or `dev` (select based on branch)
 *   **TonApiKey**: your API key from [tonapi.io](https://tonapi.io/).
-*   **TelegramBotToken**: your Bot Token from Telegram's BotFather.
+*   **TelegramBotTokenMain**: your Bot Token for `main` deployments.
+*   **TelegramBotTokenDev**: your Bot Token for `dev` deployments.
 *   **LangfuseSecretKey**: your Secret Key from Langfuse.
 *   **LangfusePublicKey**: your Public Key from Langfuse.
 *   **LangfuseHost**: defaults to `https://cloud.langfuse.com`.
@@ -133,18 +136,18 @@ You will be prompted to enter parameters. Have the following ready:
 
 ### 3. Subsequent deployments
 
-For future updates, you can use the following single-line command. This builds the container and deploys using the saved configuration without interactive prompts.
+For future updates, use the profile-specific commands below. They build the container and deploy using saved profile configuration.
 
 ```bash
-sam build --use-container && sam deploy --resolve-image-repos --no-confirm-changeset --stack-name tonpixo --capabilities CAPABILITY_IAM
+sam build --use-container && sam deploy --config-env main --resolve-image-repos --no-confirm-changeset
+sam build --use-container && sam deploy --config-env dev --resolve-image-repos --no-confirm-changeset
 ```
 
 **Command breakdown:**
 *   `sam build --use-container`: builds the application using a Docker container to ensure compatibility with AWS Lambda.
+*   `--config-env main|dev`: picks the matching profile from `samconfig.toml` (`tonpixo-main` or `tonpixo-dev` stack and `DeploymentProfile`).
 *   `--resolve-image-repos`: automatically creates and manages ECR repositories for your Docker images.
 *   `--no-confirm-changeset`: deploys immediately without waiting for manual confirmation of the changeset.
-*   `--stack-name tonpixo`: specifies the CloudFormation stack name.
-*   `--capabilities CAPABILITY_IAM`: acknowledges that SAM will create IAM roles and permissions required for your app.
 
 ### 4. Deploying the frontend
 
@@ -168,6 +171,23 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
 
 ### Backend
 
+Use separate env files per branch to avoid `TELEGRAM_BOT_TOKEN` conflicts:
+
+```bash
+git checkout main
+cp backend/env.main.example backend/.env.main
+
+git checkout dev
+cp backend/env.dev.example backend/.env.dev
+```
+
+The backend auto-loads:
+- `.env.dev` on `dev` / `development` branch
+- `.env.main` on `main` / `master` branch
+- `.env.local`, then `.env` as fallback
+
+You can force a profile manually with `TONPIXO_ENV=dev` or `TONPIXO_ENV=main`.
+
 1.  Navigate to `backend`:
     ```bash
     cd backend
@@ -181,7 +201,7 @@ After the backend is deployed, SAM will output the `FunctionUrl`. You need to co
     ```bash
     pip install -r requirements.txt
     ```
-4.  Create a `.env` file with your keys (see `template.yaml` parameters).
+4.  Create your branch-specific env file (`.env.dev` or `.env.main`) and fill keys (see `template.yaml` parameters).
 5.  Run the local server:
     ```bash
     python main.py
