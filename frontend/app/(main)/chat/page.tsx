@@ -12,6 +12,7 @@ import { Header } from "@/components/Header"
 import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
 import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
 import { cn } from "@/lib/utils"
+import { getApiUrl, getStreamUrl } from "@/lib/backendUrl"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 
@@ -544,7 +545,7 @@ function ChatContent() {
     // Cancel job function
     const cancelJob = async (jobIdToCancel: string) => {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             await axios.post(`${apiUrl}/api/cancel/${jobIdToCancel}`)
             console.log(`Job ${jobIdToCancel} cancelled`)
         } catch (err) {
@@ -575,7 +576,7 @@ function ChatContent() {
             }
 
             try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                const apiUrl = getApiUrl()
                 const response = await axios.get(`${apiUrl}/api/favourites/check/${encodeURIComponent(addressToCheck)}`, {
                     params: { user_id: user.id }
                 })
@@ -597,7 +598,7 @@ function ChatContent() {
             return
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+        const apiUrl = getApiUrl()
 
         try {
             if (isFavourite) {
@@ -668,7 +669,7 @@ function ChatContent() {
             setIsLoading(true)
 
             try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                const apiUrl = getApiUrl()
 
                 // 1. Get Metadata to restore job_id
                 const metaResponse = await axios.get(`${apiUrl}/api/chat/${chatIdParam}`, {
@@ -785,7 +786,7 @@ function ChatContent() {
             return
         }
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             await axios.post(`${apiUrl}/api/score`, {
                 trace_id: traceId,
                 score: score,
@@ -807,7 +808,7 @@ function ChatContent() {
     // Existing Polling Logic
     const pollStatus = async (jobId: string, scanType: string, targetAddress: string) => {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             const response = await axios.get(`${apiUrl}/api/status/${jobId}`)
             const data = response.data
 
@@ -907,7 +908,7 @@ function ChatContent() {
         }])
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             const response = await axios.post(`${apiUrl}/api/generate`, {
                 address: targetAddress,
                 scan_type: scanType,
@@ -952,7 +953,7 @@ function ChatContent() {
         }])
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             const response = await axios.post(`${apiUrl}/api/account_summary`, { address })
 
             // Remove loading message
@@ -1158,7 +1159,7 @@ function ChatContent() {
             // Save this interaction to backend so it persists
             const currentChatId = chatIdRef.current
             if (currentChatId) {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                const apiUrl = getApiUrl()
                 axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                     role: "agent",
                     content: "Would you like to scan all transactions or a specific amount?"
@@ -1193,7 +1194,7 @@ function ChatContent() {
                                     // Save the question to history
                                     const currentChatId = chatIdRef.current
                                     if (currentChatId) {
-                                        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+                                        const apiUrl = getApiUrl()
                                         axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                                             role: "agent",
                                             content: "How many transactions do you want to scan? Please enter a number."
@@ -1247,8 +1248,8 @@ function ChatContent() {
     const streamChat = useCallback(async (question: string) => {
         // Use separate streaming URL for Lambda Function URL (supports SSE properly)
         // Falls back to regular API URL for local development
-        const streamUrl = process.env.NEXT_PUBLIC_STREAM_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+        const streamUrl = getStreamUrl()
+        const apiUrl = getApiUrl()
 
         console.log("[STREAM] Starting stream to:", streamUrl)
         console.log("[STREAM] API URL:", apiUrl)
@@ -1822,4 +1823,3 @@ export default function ChatPage() {
         </Suspense>
     )
 }
-

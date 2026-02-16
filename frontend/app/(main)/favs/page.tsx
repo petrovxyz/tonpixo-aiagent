@@ -8,6 +8,7 @@ import { faStar, faSpinner, faChevronRight, faTrash, faCopy } from "@fortawesome
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
+import { getApiUrl } from "@/lib/backendUrl"
 
 interface Favourite {
     address: string
@@ -28,7 +29,7 @@ export default function FavsPage() {
         if (!user?.id) return
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             const response = await axios.get(`${apiUrl}/api/favourites`, {
                 params: { user_id: user.id }
             })
@@ -64,7 +65,7 @@ export default function FavsPage() {
         if (!user?.id) return
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+            const apiUrl = getApiUrl()
             await axios.delete(`${apiUrl}/api/favourites/${encodeURIComponent(address)}`, {
                 params: { user_id: user.id }
             })
