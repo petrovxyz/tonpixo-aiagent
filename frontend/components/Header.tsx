@@ -1,10 +1,11 @@
 "use client"
 
 import { motion } from "framer-motion"
-import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
+import { getAssetUrl } from "@/lib/assetsUrl"
+import Image from "next/image"
 
 export function Header({ className }: { className?: string }) {
     const { user, isMobile } = useTelegram()
@@ -18,7 +19,14 @@ export function Header({ className }: { className?: string }) {
                     layout
                     className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white/30 shadow-lg pointer-events-auto"
                 >
-                    <Image src={user?.photo_url || ""} alt="User" fill className="object-cover" unoptimized />
+                    <Image
+                        src={user?.photo_url || ""}
+                        alt="User"
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                        unoptimized
+                    />
                 </motion.div>
             )}
 
@@ -28,7 +36,13 @@ export function Header({ className }: { className?: string }) {
             >
                 <div className="flex items-center gap-2 text-[26px] font-extrabold font-sans tracking-tight px-6">
                     <div className="relative w-8 h-8">
-                        <Image src="/logo.svg" alt="Tonpixo Logo" fill className="object-contain" />
+                        <Image
+                            src={getAssetUrl("logo.svg")}
+                            alt="Tonpixo Logo"
+                            fill
+                            sizes="32px"
+                            className="object-contain"
+                        />
                     </div>
                     <span className="text-black">tonpixo</span>
                 </div>

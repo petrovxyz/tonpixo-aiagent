@@ -80,7 +80,7 @@ The Agent interprets the number and generates a natural language response (or a 
 ├── frontend/               # Next.js Web Application
 │   ├── app/                # App Router pages and layouts
 │   ├── components/         # Reusable React components
-│   └── public/             # Static assets
+│   └── public/             # (empty) assets are served from S3
 └── README.md               # This file
 └── LICENSE                 # License
 ```
@@ -195,6 +195,20 @@ The frontend resolves the backend URL using the following priority (first match 
 
 The same priority applies for the stream URL (`NEXT_PUBLIC_DEV_STREAM_URL`, `NEXT_PUBLIC_MAIN_STREAM_URL`, etc.).
 
+#### Frontend assets
+
+The backend template auto-creates a **shared** assets bucket in the **main** stack:
+`tonpixo-assets-<account-id>-<region>`.
+Deploy the **main** stack at least once to create this bucket before using uploads from dev.
+
+Provide a single shared assets base URL for both dev and main:
+
+```env
+NEXT_PUBLIC_ASSETS_BASE_URL=https://tonpixo-assets-<account-id>-<region>.s3.<region>.amazonaws.com/assets
+```
+
+The frontend will resolve image URLs by prefixing paths like `images/preloader.webp` with this base URL.
+
 #### Option A: AWS Amplify (recommended)
 
 Set these as **app-level** environment variables in the Amplify console (or via CLI). The app auto-selects the correct URL by matching the hostname (`dev.*` → `DEV_*`, `main.*` → `MAIN_*`).
@@ -210,6 +224,9 @@ NEXT_PUBLIC_DEV_STREAM_URL=https://<dev-function-id>.lambda-url.<region>.on.aws
 # Main/prod stack — use the FunctionUrl from tonpixo-main stack output
 NEXT_PUBLIC_MAIN_API_URL=https://<main-function-id>.lambda-url.<region>.on.aws
 NEXT_PUBLIC_MAIN_STREAM_URL=https://<main-function-id>.lambda-url.<region>.on.aws
+
+# Shared assets bucket (dev + main)
+NEXT_PUBLIC_ASSETS_BASE_URL=https://tonpixo-assets-<account-id>-<region>.s3.<region>.amazonaws.com/assets
 ```
 
 To set via CLI:
@@ -237,6 +254,22 @@ Create a `.env.local` file in the `frontend/` directory:
 ```env
 # Point to whatever backend you want to use
 NEXT_PUBLIC_API_URL=https://<function-id>.lambda-url.<region>.on.aws
+
+# Shared assets bucket
+NEXT_PUBLIC_ASSETS_BASE_URL=https://tonpixo-assets-<account-id>-<region>.s3.<region>.amazonaws.com/assets
+```
+
+#### Uploading assets
+
+Use the backend presign endpoint to upload images directly to S3:
+
+1. `POST /api/assets/presign` with JSON `{ "filename": "...", "content_type": "image/webp" }`.
+2. POST the returned `upload` fields to the returned `upload.url`.
+3. Use `assetUrl` in the frontend.
+
+Optional bulk upload:
+```bash
+aws s3 sync /path/to/assets s3://tonpixo-assets-<account-id>-<region>/assets/
 ```
 
 Then build and deploy:

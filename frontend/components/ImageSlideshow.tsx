@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion"
-import Image from "next/image"
-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faArrowUp } from "@fortawesome/free-solid-svg-icons"
+import { LazyImage } from "@/components/LazyImage"
 
 type Slide = {
     id: string
@@ -114,12 +113,14 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                     className="absolute inset-0 w-full h-full bg-black/5"
                 >
                     <div className="relative w-full h-full">
-                        <Image
+                        <LazyImage
                             src={slides[index].image}
                             alt={slides[index].title}
                             fill
+                            sizes="(max-width: 672px) 100vw, 672px"
                             className="object-cover"
-                            priority
+                            priority={index === 0}
+                            loading={index === 0 ? "eager" : "lazy"}
                             draggable={false}
                         />
 

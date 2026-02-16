@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faStar as faStarSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
@@ -15,6 +14,8 @@ import { cn } from "@/lib/utils"
 import { getApiUrl, getStreamUrl } from "@/lib/backendUrl"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
+import { getAssetUrl } from "@/lib/assetsUrl"
+import { LazyImage } from "@/components/LazyImage"
 
 // Global lock to prevent duplicate address processing across component remounts
 let globalProcessingAddress: string | null = null
@@ -25,7 +26,7 @@ const BEST_PRACTICES_ITEM: QAItem = {
     id: 'best-practices',
     question: "Best practices",
     answer: "The more specific your prompt, the better the result. Always define clear timeframes, explicitly name the assets you are tracking, and state your desired format. Avoid vague questions. Instead, combine dates, actions, and filters to get desired insights.",
-    image: "/images/banner_best_practices.webp"
+    image: getAssetUrl("images/banner_best_practices.webp")
 }
 
 // Message Type Definition
@@ -315,13 +316,19 @@ const MessageBubble = ({
         >
             {role === "agent" && (
                 <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    <Image src="/logo.svg" alt="Agent" width={24} height={24} className="object-contain" />
+                    <LazyImage
+                        src={getAssetUrl("logo.svg")}
+                        alt="Agent"
+                        width={24}
+                        height={24}
+                        className="object-contain"
+                    />
                 </div>
             )}
             {role === "user" && (
                 <div className="relative w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
                     {userPhotoUrl ? (
-                        <Image src={userPhotoUrl} alt="User" fill className="object-cover" unoptimized />
+                        <LazyImage src={userPhotoUrl} alt="User" fill className="object-cover" unoptimized />
                     ) : (
                         <div className="w-full h-full bg-gradient-to-br from-[#4FC3F7] to-[#0098EA] flex items-center justify-center text-white font-bold text-sm">
                             U

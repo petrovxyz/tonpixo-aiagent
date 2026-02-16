@@ -20,3 +20,51 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
+
+.image-frame {
+  --shimmer-bg: rgba(255, 255, 255, 0.08);
+  --shimmer-from: rgba(255, 255, 255, 0.05);
+  --shimmer-via: rgba(255, 255, 255, 0.18);
+  background: var(--shimmer-bg);
+  overflow: hidden;
+}
+
+.image-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg,
+      var(--shimmer-from) 25%,
+      var(--shimmer-via) 50%,
+      var(--shimmer-from) 75%);
+  background-size: 200% 100%;
+  animation: image-shimmer 1.6s ease-in-out infinite;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.image-frame[data-loaded="true"]::after {
+  opacity: 0;
+  animation: none;
+}
+
+.image-frame img {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.image-frame[data-loaded="true"] img {
+  opacity: 1;
+}
+
+@keyframes image-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}

@@ -12,7 +12,7 @@ import json
 import asyncio
 import uvicorn
 import requests
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent import process_chat, process_chat_stream, langfuse, flush_langfuse
@@ -35,6 +35,7 @@ if not os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
     )
 
 sqs = boto3.client('sqs')
+s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
 QUEUE_URL = os.environ.get('JOBS_QUEUE_URL')
@@ -67,6 +68,41 @@ class ScoreRequest(BaseModel):
     comment: str | None = None
     name: str | None = None
 
+class AssetPresignRequest(BaseModel):
+    filename: str
+    content_type: str
+
+ALLOWED_ASSET_CONTENT_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
+
+def _get_assets_config() -> tuple[str | None, str | None, str, int]:
+    bucket = get_config_value("ASSETS_BUCKET")
+    base_url = get_config_value("ASSETS_BASE_URL")
+    prefix = (get_config_value("ASSETS_PREFIX") or "assets").strip("/") or "assets"
+    max_size_raw = get_config_value("ASSET_MAX_SIZE_MB") or "5"
+    try:
+        max_size_mb = int(max_size_raw)
+    except ValueError:
+        max_size_mb = 5
+    max_size_mb = max(1, max_size_mb)
+    return bucket, base_url, prefix, max_size_mb
+
+def _build_asset_url(base_url: str, key: str, prefix: str) -> str:
+    from urllib.parse import urlparse
+
+    base = base_url.rstrip("/")
+    prefix_norm = prefix.strip("/")
+    base_path = urlparse(base).path.rstrip("/")
+
+    if base_path.endswith(f"/{prefix_norm}") or base_path == f"/{prefix_norm}":
+        relative_key = key[len(prefix_norm) + 1:] if key.startswith(f"{prefix_norm}/") else key
+        return f"{base}/{relative_key}"
+
+    return f"{base}/{key}"
+
 
 @app.get("/api/health")
 async def health_check():
@@ -75,6 +111,46 @@ async def health_check():
         "message": "Server is running",
         "timestamp": str(uuid.uuid4())
     }
+
+
+@app.post("/api/assets/presign")
+async def presign_asset_upload(request: AssetPresignRequest):
+    bucket, base_url, prefix, max_size_mb = _get_assets_config()
+    if not bucket or not base_url:
+        raise HTTPException(status_code=500, detail="Assets storage is not configured.")
+
+    if not request.filename.strip():
+        raise HTTPException(status_code=400, detail="Filename is required.")
+
+    content_type = request.content_type.strip().lower()
+    if content_type not in ALLOWED_ASSET_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported content type.")
+
+    extension = ALLOWED_ASSET_CONTENT_TYPES[content_type]
+    key = f"{prefix}/{uuid.uuid4()}.{extension}"
+    max_size_bytes = max_size_mb * 1024 * 1024
+    cache_control = "public, max-age=86400"
+
+    try:
+        presigned = s3.generate_presigned_post(
+            Bucket=bucket,
+            Key=key,
+            Fields={
+                "Content-Type": content_type,
+                "Cache-Control": cache_control,
+            },
+            Conditions=[
+                {"Content-Type": content_type},
+                {"Cache-Control": cache_control},
+                ["content-length-range", 1, max_size_bytes],
+            ],
+            ExpiresIn=300,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create upload URL: {exc}")
+
+    asset_url = _build_asset_url(base_url, key, prefix)
+    return {"key": key, "upload": presigned, "assetUrl": asset_url}
 
 
 def validate_telegram_init_data(init_data: str, bot_token: str) -> tuple[bool, dict | None, str]:
