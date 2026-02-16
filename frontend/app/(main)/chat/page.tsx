@@ -16,7 +16,7 @@ import { getApiUrl, getStreamUrl } from "@/lib/backendUrl"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
+import { getBlurDataURL } from "@/lib/imagePlaceholders"
 
 // Global lock to prevent duplicate address processing across component remounts
 let globalProcessingAddress: string | null = null
@@ -324,7 +324,7 @@ const MessageBubble = ({
                         height={24}
                         className="object-contain"
                         placeholder="blur"
-                        blurDataURL={DEFAULT_BLUR_DATA_URL}
+                        blurDataURL={getBlurDataURL(getAssetUrl("logo.svg"))}
                     />
                 </div>
             )}

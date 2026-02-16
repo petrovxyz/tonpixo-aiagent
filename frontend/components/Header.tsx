@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
+import { getBlurDataURL } from "@/lib/imagePlaceholders"
 
 export function Header({ className }: { className?: string }) {
     const { user, isMobile } = useTelegram()
@@ -27,7 +27,7 @@ export function Header({ className }: { className?: string }) {
                         sizes="56px"
                         className="object-cover"
                         placeholder="blur"
-                        blurDataURL={DEFAULT_BLUR_DATA_URL}
+                        blurDataURL={getBlurDataURL(user?.photo_url)}
                         unoptimized
                     />
                 </motion.div>
@@ -46,7 +46,7 @@ export function Header({ className }: { className?: string }) {
                             sizes="32px"
                             className="object-contain"
                             placeholder="blur"
-                            blurDataURL={DEFAULT_BLUR_DATA_URL}
+                            blurDataURL={getBlurDataURL(getAssetUrl("logo.svg"))}
                         />
                     </div>
                     <span className="text-black">tonpixo</span>

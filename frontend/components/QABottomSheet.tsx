@@ -7,7 +7,7 @@ import { motion, PanInfo } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTimes } from "@fortawesome/free-solid-svg-icons"
 import { useUI } from "@/context/UIContext"
-import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
+import { getBlurDataURL } from "@/lib/imagePlaceholders"
 
 export interface QAItem {
     id: string
@@ -90,7 +90,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                             className="object-cover"
                             loading="lazy"
                             placeholder="blur"
-                            blurDataURL={DEFAULT_BLUR_DATA_URL}
+                            blurDataURL={getBlurDataURL(item.image)}
                             unoptimized
                         />
                     </div>

@@ -8,7 +8,7 @@ import { useTelegram } from "@/context/TelegramContext"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { DEFAULT_BLUR_DATA_URL } from "@/lib/imagePlaceholders"
+import { getBlurDataURL } from "@/lib/imagePlaceholders"
 
 export default function Preloader() {
     const { isInitialLoading, setIsInitialLoading } = useUI()
@@ -56,7 +56,7 @@ export default function Preloader() {
                         className="object-cover"
                         priority
                         placeholder="blur"
-                        blurDataURL={DEFAULT_BLUR_DATA_URL}
+                        blurDataURL={getBlurDataURL(getAssetUrl("images/preloader.webp"))}
                     />
                     {/* Optional: Add a subtle overlay to maintain contrast for the logo/text if needed */}
                     <div className="absolute inset-0 transition-opacity" />
@@ -85,7 +85,7 @@ export default function Preloader() {
                                     className="object-contain"
                                     priority
                                     placeholder="blur"
-                                    blurDataURL={DEFAULT_BLUR_DATA_URL}
+                                    blurDataURL={getBlurDataURL(getAssetUrl("logo.svg"))}
                                 />
                             </div>
                             <span className="text-black">tonpixo</span>
