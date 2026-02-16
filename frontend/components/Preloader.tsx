@@ -2,13 +2,12 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { useEffect, useState } from "react"
-import Image from "next/image"
 import { useUI } from "@/context/UIContext"
 import { useTelegram } from "@/context/TelegramContext"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { getBlurDataURL } from "@/lib/imagePlaceholders"
+import { LazyImage } from "@/components/LazyImage"
 
 export default function Preloader() {
     const { isInitialLoading, setIsInitialLoading } = useUI()
@@ -48,15 +47,13 @@ export default function Preloader() {
                     }}
                     className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
                 >
-                    <Image
+                    <LazyImage
                         src={getAssetUrl("images/preloader.webp")}
                         alt="Preloader background"
                         fill
                         sizes="100vw"
                         className="object-cover"
                         priority
-                        placeholder="blur"
-                        blurDataURL={getBlurDataURL(getAssetUrl("images/preloader.webp"))}
                     />
                     {/* Optional: Add a subtle overlay to maintain contrast for the logo/text if needed */}
                     <div className="absolute inset-0 transition-opacity" />
@@ -77,15 +74,13 @@ export default function Preloader() {
                             className="flex items-center gap-2 text-[32px] font-extrabold font-sans tracking-tight mb-6"
                         >
                             <div className="relative w-12 h-12">
-                                <Image
+                                <LazyImage
                                     src={getAssetUrl("logo.svg")}
                                     alt="Tonpixo logo"
                                     fill
                                     sizes="48px"
                                     className="object-contain"
                                     priority
-                                    placeholder="blur"
-                                    blurDataURL={getBlurDataURL(getAssetUrl("logo.svg"))}
                                 />
                             </div>
                             <span className="text-black">tonpixo</span>

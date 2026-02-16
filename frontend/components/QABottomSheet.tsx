@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import Image from "next/image"
 import { motion, PanInfo } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faTimes } from "@fortawesome/free-solid-svg-icons"
 import { useUI } from "@/context/UIContext"
-import { getBlurDataURL } from "@/lib/imagePlaceholders"
+import { LazyImage } from "@/components/LazyImage"
 
 export interface QAItem {
     id: string
@@ -82,15 +81,15 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                 <div className="flex flex-col h-full overflow-y-auto pb-8">
                     {/* Image Section */}
                     <div className="relative w-full h-50 bg-gray-100 shrink-0 rounded-t-3xl">
-                        <Image
+                        <LazyImage
                             src={item.image}
                             alt={item.question}
                             fill
                             sizes="(max-width: 512px) 100vw, 512px"
                             className="object-cover"
+                            wrapperClassName="shimmer-light"
                             loading="lazy"
-                            placeholder="blur"
-                            blurDataURL={getBlurDataURL(item.image)}
+                            minShimmerMs={600}
                             unoptimized
                         />
                     </div>

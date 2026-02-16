@@ -1,13 +1,12 @@
 "use client"
 
 import React, { useMemo } from 'react'
-import Image from "next/image"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { ChartRenderer } from './ChartRenderer'
-import { getBlurDataURL } from "@/lib/imagePlaceholders"
+import { LazyImage } from "@/components/LazyImage"
 
 interface MarkdownRendererProps {
     content: string
@@ -289,17 +288,16 @@ export function MarkdownRenderer({ content, className, isUserMessage = false, is
         // Images 
         img: ({ src, alt }: any) => {
             return (
-                <Image
+                <LazyImage
                     src={src || ''}
                     alt={alt || ''}
                     width={0}
                     height={0}
                     sizes="100vw"
+                    wrapperClassName="w-full"
                     style={{ width: '100%', height: 'auto' }}
                     className="rounded-lg my-3"
                     loading="lazy"
-                    placeholder="blur"
-                    blurDataURL={getBlurDataURL(src)}
                     unoptimized
                 />
             )

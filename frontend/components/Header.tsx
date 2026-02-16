@@ -1,12 +1,11 @@
 "use client"
 
 import { motion } from "framer-motion"
-import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useTelegram } from "@/context/TelegramContext"
 import { usePathname } from "next/navigation"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { getBlurDataURL } from "@/lib/imagePlaceholders"
+import { LazyImage } from "@/components/LazyImage"
 
 export function Header({ className }: { className?: string }) {
     const { user, isMobile } = useTelegram()
@@ -20,14 +19,12 @@ export function Header({ className }: { className?: string }) {
                     layout
                     className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white/30 shadow-lg pointer-events-auto"
                 >
-                    <Image
+                    <LazyImage
                         src={user?.photo_url || ""}
                         alt="User"
                         fill
                         sizes="56px"
                         className="object-cover"
-                        placeholder="blur"
-                        blurDataURL={getBlurDataURL(user?.photo_url)}
                         unoptimized
                     />
                 </motion.div>
@@ -39,14 +36,12 @@ export function Header({ className }: { className?: string }) {
             >
                 <div className="flex items-center gap-2 text-[26px] font-extrabold font-sans tracking-tight px-6">
                     <div className="relative w-8 h-8">
-                        <Image
+                        <LazyImage
                             src={getAssetUrl("logo.svg")}
                             alt="Tonpixo Logo"
                             fill
                             sizes="32px"
                             className="object-contain"
-                            placeholder="blur"
-                            blurDataURL={getBlurDataURL(getAssetUrl("logo.svg"))}
                         />
                     </div>
                     <span className="text-black">tonpixo</span>
