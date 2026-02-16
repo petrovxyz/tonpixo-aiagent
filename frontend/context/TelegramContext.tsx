@@ -59,6 +59,10 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
 
         try {
             const apiUrl = getApiUrl()
+            if (!apiUrl) {
+                console.error("[TG] Backend API URL is not configured for this environment")
+                return
+            }
             await axios.post(`${apiUrl}/api/login`, {
                 initData: initDataRaw
             })
@@ -154,6 +158,11 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
 
                     if (raw) {
                         const apiUrl = getApiUrl()
+                        if (!apiUrl) {
+                            console.error("[TG] Backend API URL is not configured for this environment")
+                            setError("Backend URL is not configured. Contact support.")
+                            return
+                        }
                         console.log("[TG] Sending login request to:", `${apiUrl}/api/login`)
 
                         try {
