@@ -224,7 +224,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: "tonpixo_db"
+        Name: !Sub "tonpixo_db_${DeploymentProfile}"
 
   TransactionsTable:
     Type: AWS::Glue::Table
