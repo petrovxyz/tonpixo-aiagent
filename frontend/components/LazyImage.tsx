@@ -4,10 +4,19 @@ import Image, { ImageProps } from "next/image"
 import { useRef, useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 
+/** Global cache of image srcs that have already been loaded this session */
+const loadedSrcs = new Set<string>()
+
 type LazyImageProps = ImageProps & {
     wrapperClassName?: string
     wrapperStyle?: React.CSSProperties
     minShimmerMs?: number
+}
+
+function getSrcKey(src: ImageProps["src"]): string {
+    if (typeof src === "string") return src
+    if (typeof src === "object" && "src" in src) return src.src
+    return ""
 }
 
 export function LazyImage({
@@ -19,7 +28,10 @@ export function LazyImage({
     minShimmerMs = 220,
     ...props
 }: LazyImageProps) {
-    const [loaded, setLoaded] = useState(false)
+    const srcKey = getSrcKey(props.src)
+    const alreadyCached = srcKey ? loadedSrcs.has(srcKey) : false
+
+    const [loaded, setLoaded] = useState(alreadyCached)
     const mountTimeRef = useRef<number>(Date.now())
     const timeoutRef = useRef<number | null>(null)
     const isFill = Boolean(props.fill)
@@ -63,6 +75,8 @@ export function LazyImage({
                 onLoad={(e) => {
                     const img = e.currentTarget as HTMLImageElement
                     if (img.naturalWidth === 0) return
+                    if (srcKey) loadedSrcs.add(srcKey)
+                    if (alreadyCached) return
                     const elapsed = Date.now() - mountTimeRef.current
                     const delay = Math.max(0, minShimmerMs - elapsed)
                     timeoutRef.current = window.setTimeout(() => {
