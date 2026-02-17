@@ -96,7 +96,7 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
 
                     {/* Text Section */}
                     <div className="px-6 pt-6 text-lg leading-relaxed text-gray-600 font-medium space-y-4">
-                        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{item.question}</h2>
+                        <h2 className="text-[22px] md:text-3xl font-bold text-gray-900 leading-tight">{item.question}</h2>
                         <p>{item.answer}</p>
 
                         {/* Check Button */}
