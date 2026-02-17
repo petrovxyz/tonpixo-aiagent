@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowUp, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faStar as faStarSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
-import { faStar as faStarOutline } from "@fortawesome/free-regular-svg-icons"
+import { faCheckCircle, faSpinner, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faBookmark as faBookmarkSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
+import { ArrowUpIcon, type ArrowUpIconHandle } from "@/components/icons/ArrowUpIcon"
+import { faBookmark as faBookmarkOutline } from "@fortawesome/free-regular-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
 import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
@@ -473,6 +474,7 @@ function ChatContent() {
     const hasStartedRef = useRef(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
+    const arrowUpRef = useRef<ArrowUpIconHandle>(null)
     const streamingMsgIdRef = useRef<string | null>(null)
     const userRef = useRef(user)
     const activeSessionRef = useRef(false) // Track if messages were added during this session
@@ -1715,7 +1717,7 @@ function ChatContent() {
                                 isMobile ? "mt-24" : "mt-10"
                             )}
                         >
-                            <FontAwesomeIcon icon={isFavourite ? faStarSolid : faStarOutline} className="text-xl" />
+                            <FontAwesomeIcon icon={isFavourite ? faBookmarkSolid : faBookmarkOutline} className="text-xl" />
                         </button>
                     </div>
                 </div>
@@ -1797,12 +1799,13 @@ function ChatContent() {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
+                                    arrowUpRef.current?.startAnimation();
                                     handleSend();
                                 }}
                                 disabled={!inputValue.trim() || (isLoading && messages.some(m => m.content === "collecting"))}
                                 className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white hover:bg-gray-100 text-[#0098EA] rounded-full active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg cursor-pointer z-10"
                             >
-                                <FontAwesomeIcon icon={faArrowUp} className="text-xl" />
+                                <ArrowUpIcon ref={arrowUpRef} size={22} />
                             </button>
                         </div>
                     </div>

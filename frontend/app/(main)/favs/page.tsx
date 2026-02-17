@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faStar, faSpinner, faChevronRight, faTrash, faCopy } from "@fortawesome/free-solid-svg-icons"
+import { faBookmark, faSpinner, faChevronRight, faTrash, faCopy } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
@@ -121,7 +121,7 @@ export default function FavsPage() {
                 className="flex items-center gap-3 py-2 mb-4"
             >
                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/10">
-                    <FontAwesomeIcon icon={faStar} className="text-lg" />
+                    <FontAwesomeIcon icon={faBookmark} className="text-lg" />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">Favourites</h1>
@@ -153,7 +153,7 @@ export default function FavsPage() {
                         className="flex flex-col items-center justify-center py-8 text-center"
                     >
                         <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-5 border border-white/10">
-                            <FontAwesomeIcon icon={faStar} className="text-white/60 text-2xl" />
+                            <FontAwesomeIcon icon={faBookmark} className="text-white/60 text-2xl" />
                         </div>
                         <p className="font-semibold text-lg text-white mb-1">No favourites yet</p>
                         <p className="text-white/50 font-medium text-sm mb-6">Save wallet address from chat</p>

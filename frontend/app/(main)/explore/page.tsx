@@ -144,7 +144,7 @@ export default function Home() {
 
               setRipples((prev) => [...prev, ripple]);
             }}
-            className={`relative bg-white/10 border-2 rounded-full p-2 pl-6 flex items-center transition-all shadow-xl overflow-hidden ${validationError
+            className={`relative bg-white/10 border-2 rounded-full p-1.5 pl-6 flex items-center transition-all shadow-xl overflow-hidden ${validationError
               ? 'border-red-400/70 hover:border-red-400'
               : 'border-white/20 hover:border-white/40'
               }`}>
@@ -180,7 +180,7 @@ export default function Home() {
               onKeyDown={handleKeyDown}
               placeholder="Enter TON address..."
               disabled={isValidating}
-              className="bg-transparent border-none outline-none text-lg w-full text-white placeholder:text-white/50 font-medium disabled:opacity-50 z-10"
+              className="bg-transparent border-none outline-none text-[17px] w-full text-white placeholder:text-white/50 font-medium disabled:opacity-50 z-10"
             />
             <button
               onClick={(e) => {

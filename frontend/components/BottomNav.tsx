@@ -1,23 +1,101 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCube, faStar, faGear, faClockRotateLeft } from "@fortawesome/free-solid-svg-icons"
 import { cn } from "@/lib/utils"
 
+import { BotIcon, type BotIconHandle } from "@/components/icons/BotIcon"
+import { HistoryIcon, type HistoryIconHandle } from "@/components/icons/HistoryIcon"
+import { BookmarkIcon, type BookmarkIconHandle } from "@/components/icons/BookmarkIcon"
+import { SettingsIcon, type SettingsIconHandle } from "@/components/icons/SettingsIcon"
+
+type IconHandle = BotIconHandle | HistoryIconHandle | BookmarkIconHandle | SettingsIconHandle
+
 const NAV_ITEMS = [
-    { id: "explore", label: "Explore", icon: faCube, path: "/explore" },
-    { id: "history", label: "History", icon: faClockRotateLeft, path: "/history" },
-    { id: "favs", label: "Favs", icon: faStar, path: "/favs" },
-    { id: "settings", label: "Settings", icon: faGear, path: "/settings" },
-]
+    { id: "explore", label: "Explore", path: "/explore" },
+    { id: "history", label: "History", path: "/history" },
+    { id: "favs", label: "Favs", path: "/favs" },
+    { id: "settings", label: "Settings", path: "/settings" },
+] as const
 
 export function BottomNav() {
     const pathname = usePathname()
     const router = useRouter()
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
+
+    const botRef = useRef<BotIconHandle>(null)
+    const historyRef = useRef<HistoryIconHandle>(null)
+    const bookmarkRef = useRef<BookmarkIconHandle>(null)
+    const settingsRef = useRef<SettingsIconHandle>(null)
+
+    const iconRefs: Record<string, React.RefObject<IconHandle | null>> = {
+        explore: botRef,
+        history: historyRef,
+        favs: bookmarkRef,
+        settings: settingsRef,
+    }
+
+    const prevPathnameRef = useRef(pathname)
+
+    useEffect(() => {
+        // When pathname changes, animate the new active icon (start) and stop the old one
+        const prevPath = prevPathnameRef.current
+        prevPathnameRef.current = pathname
+
+        // Find which nav item corresponds to old and new path
+        const oldItem = NAV_ITEMS.find(item => item.path === prevPath)
+        const newItem = NAV_ITEMS.find(item => item.path === pathname)
+
+        // Stop animation on the previously active icon (idle -> end)
+        if (oldItem && oldItem.id !== newItem?.id) {
+            const oldRef = iconRefs[oldItem.id]
+            oldRef?.current?.stopAnimation()
+        }
+
+        // Start animation on the newly active icon (start -> idle)
+        if (newItem) {
+            const newRef = iconRefs[newItem.id]
+            newRef?.current?.startAnimation()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname])
+
+    // Animate on initial mount for the active tab
+    useEffect(() => {
+        const activeItem = NAV_ITEMS.find(item => item.path === pathname)
+        if (activeItem) {
+            const ref = iconRefs[activeItem.id]
+            // Small delay to ensure refs are attached
+            const timeout = setTimeout(() => {
+                ref?.current?.startAnimation()
+            }, 300)
+            return () => clearTimeout(timeout)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    const handleNavClick = (itemId: string, path: string) => {
+        // Start animation immediately on tap
+        const ref = iconRefs[itemId]
+        ref?.current?.startAnimation()
+        router.push(path)
+    }
+
+    const renderIcon = (itemId: string, size: number) => {
+        switch (itemId) {
+            case "explore":
+                return <BotIcon ref={botRef} size={size} />
+            case "history":
+                return <HistoryIcon ref={historyRef} size={size} />
+            case "favs":
+                return <BookmarkIcon ref={bookmarkRef} size={size} />
+            case "settings":
+                return <SettingsIcon ref={settingsRef} size={size} />
+            default:
+                return null
+        }
+    }
 
     return (
         <div id="bottom-nav" className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
@@ -68,13 +146,15 @@ export function BottomNav() {
                     return (
                         <button
                             key={item.id}
-                            onClick={() => router.push(item.path)}
+                            onClick={() => handleNavClick(item.id, item.path)}
                             className={cn(
-                                "flex-1 flex flex-col items-center justify-center py-3 px-1 relative z-10 transition-colors duration-300 cursor-pointer",
-                                isActive ? "text-white" : "text-white/60 hover:text-white"
+                                "flex-1 flex flex-col items-center justify-center py-2 px-1 relative z-10 transition-colors duration-300 cursor-pointer",
+                                isActive ? "text-white" : "text-gray-200 hover:text-white"
                             )}
                         >
-                            <FontAwesomeIcon icon={item.icon} className="text-[20px] mb-1" />
+                            <div className="mb-1">
+                                {renderIcon(item.id, 20)}
+                            </div>
                             <span className="text-[10px] font-bold uppercase">{item.label}</span>
 
                             {isActive && (
