@@ -69,7 +69,7 @@ export function PrivacyConsentBanner() {
         id: "privacy",
         question: "Your data and privacy",
         answer:
-            "We process the address user enter and the questions user ask to improve responses. We also collect some basic user info and error logs to keep Tonpixo running smoothly and prevent abuse. We do not sell or share your data with third parties.",
+            "We process the address user enter and the questions user ask to improve responses. We also collect some basic user info and logs to keep Tonpixo running smoothly and prevent abuse. We do not sell or share your data with third parties.",
         image: getAssetUrl("images/banner_data_privacy.webp"),
     }
 
