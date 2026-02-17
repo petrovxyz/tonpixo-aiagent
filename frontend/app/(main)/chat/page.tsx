@@ -333,11 +333,17 @@ function ChatContent() {
                     return
                 }
 
-                if (meta.error) {
+                const isNewAddressBootstrap = Boolean(addressParam) && meta.error === "Chat not found"
+
+                if (meta.error && !isNewAddressBootstrap) {
                     throw new Error(meta.error)
                 }
-                if (history.error) {
+                if (history.error && !isNewAddressBootstrap) {
                     throw new Error(history.error)
+                }
+
+                if (isNewAddressBootstrap) {
+                    console.log(`[CHAT] Chat ${chatIdParam} not found; treating as new address bootstrap`)
                 }
 
                 if (meta && !meta.error) {
