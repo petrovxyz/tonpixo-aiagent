@@ -333,13 +333,23 @@ function ChatContent() {
                     return
                 }
 
-                const isNewAddressBootstrap = Boolean(addressParam) && meta.error === "Chat not found"
+                const isMetaNotFound = meta.error === "Chat not found"
+                const isHistoryNotFound = history.error === "Chat not found"
+                const isNewAddressBootstrap =
+                    Boolean(addressParam) &&
+                    isMetaNotFound &&
+                    (!history.error || isHistoryNotFound)
 
-                if (meta.error && !isNewAddressBootstrap) {
-                    throw new Error(meta.error)
-                }
-                if (history.error && !isNewAddressBootstrap) {
-                    throw new Error(history.error)
+                if (!isNewAddressBootstrap) {
+                    if (history.error && !isHistoryNotFound) {
+                        throw new Error(history.error)
+                    }
+                    if (meta.error) {
+                        throw new Error(meta.error)
+                    }
+                    if (history.error) {
+                        throw new Error(history.error)
+                    }
                 }
 
                 if (isNewAddressBootstrap) {
