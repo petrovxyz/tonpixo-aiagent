@@ -2,233 +2,44 @@
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faCheckCircle, faSpinner, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faBookmark as faBookmarkSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
+import { faCheckCircle, faSpinner, faArrowLeft, faClockRotateLeft, faWallet, faObjectGroup, faBookmark as faBookmarkSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
 import { ArrowUpIcon, type ArrowUpIconHandle } from "@/components/icons/ArrowUpIcon"
 import { faBookmark as faBookmarkOutline } from "@fortawesome/free-regular-svg-icons"
 import axios from "axios"
 import { Header } from "@/components/Header"
-import { MarkdownRenderer, AnimatedText } from "@/components/MarkdownRenderer"
+import { AnimatedText } from "@/components/MarkdownRenderer"
 import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
 import { cn } from "@/lib/utils"
 import { getApiUrl, getStreamUrl } from "@/lib/backendUrl"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 import { getAssetUrl } from "@/lib/assetsUrl"
-import { LazyImage } from "@/components/LazyImage"
-
-// Global lock to prevent duplicate address processing across component remounts
-let globalProcessingAddress: string | null = null
-let globalPendingChatId: string | null = null
-let globalPendingMessages: Message[] | null = null
+import type { AddressBootstrapOptions, AddressDetailsData, Message } from "./types"
+import {
+    appendMessage,
+    buildChatRoute,
+    getAddressBootstrapState,
+    mapStoredHistoryToMessages,
+    removeTransientMessages,
+    retryWithBackoff
+} from "./bootstrapUtils"
+import { fetchChatBootstrap, initChat, requestAccountSummary, saveChatMessage } from "./chatApi"
+import { buildAddressDetailsFromSummary, buildErrorAddressDetails } from "./addressDetailsUtils"
+import {
+    ActionButton,
+    AddressDetailsMessage,
+    MessageBubble,
+    parseStoredMessage,
+    StreamingMessage
+} from "./components/messageUi"
 
 const BEST_PRACTICES_ITEM: QAItem = {
     id: 'best-practices',
     question: "Best practices",
     answer: "The more specific your prompt, the better the result. Always define clear timeframes, explicitly name the assets you are tracking, and state your desired format. Avoid vague questions. Instead, combine dates, actions, and filters to get desired insights.",
     image: getAssetUrl("images/banner_best_practices.webp")
-}
-
-// Message Type Definition
-interface Message {
-    id: string
-    role: "user" | "agent"
-    content: React.ReactNode
-    timestamp: Date
-    isStreaming?: boolean
-    streamingText?: string  // Track the actual text being streamed
-    thinkingText?: string   // Track agent's thinking/reasoning before answer
-    isAnalyzing?: boolean   // Track if agent is using tools
-    traceId?: string        // Langfuse trace ID for feedback
-    isSystemMessage?: boolean // Flag for system messages (no actions)
-}
-
-
-// Action Button Component for clickable buttons in messages
-const ActionButton = ({
-    children,
-    onClick,
-    icon,
-    variant = "primary",
-    className
-}: {
-    children: React.ReactNode
-    onClick: () => void
-    icon?: React.ReactNode
-    variant?: "primary" | "secondary" | "link" | "icon_user" | "icon_agent"
-    className?: string
-}) => {
-    const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
-
-    return (
-        <button
-            onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                const size = Math.max(rect.width, rect.height);
-
-                const ripple = {
-                    id: Date.now(),
-                    x,
-                    y,
-                    size
-                };
-
-                setRipples((prev) => [...prev, ripple]);
-                onClick();
-            }}
-            className={cn(
-                "relative flex items-center justify-center gap-1.5 font-medium transition-all active:scale-[0.98] cursor-pointer overflow-hidden",
-                variant === "primary" && "w-full px-4 py-3 rounded-xl bg-[#0098EA] text-white hover:bg-[#0088CC] text-[14px]",
-                variant === "icon_user" && "mx-2 p-1.5 rounded-full text-gray-700 bg-black/5 hover:bg-black/10 text-sm",
-                variant === "icon_agent" && "mx-2 p-1.5 rounded-full text-white bg-white/10 hover:bg-white/15 text-sm",
-                className
-            )}
-        >
-            <AnimatePresence>
-                {ripples.map((ripple) => (
-                    <motion.span
-                        key={ripple.id}
-                        initial={{ scale: 0, opacity: 0.35 }}
-                        animate={{ scale: 4, opacity: 0 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        onAnimationComplete={() => {
-                            setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
-                        }}
-                        className="absolute bg-white/50 rounded-full pointer-events-none"
-                        style={{
-                            left: ripple.x,
-                            top: ripple.y,
-                            width: ripple.size,
-                            height: ripple.size,
-                            marginLeft: -ripple.size / 2,
-                            marginTop: -ripple.size / 2,
-                        }}
-                    />
-                ))}
-            </AnimatePresence>
-            <span className="relative z-10 flex items-center gap-1.5">
-                {icon}
-                {children}
-            </span>
-        </button>
-    )
-}
-
-// Explorer Link Button - opens in new tab
-const ExplorerLink = ({
-    href,
-    children,
-    icon
-}: {
-    href: string
-    children: React.ReactNode
-    icon?: React.ReactNode
-}) => (
-    <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full bg-[#0098EA] hover:bg-[#0088CC] text-[14px] flex items-center justify-center gap-1 px-4 py-3 rounded-xl font-medium transition-all text-white active:scale-[0.98]"
-    >
-        {icon}
-        {children}
-        <FontAwesomeIcon icon={faExternalLinkAlt} className="text-xs opacity-70" />
-    </a>
-)
-
-// Tonviewer icon SVG component
-const TonviewerIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 40 40">
-        <path fill="#89B8FF" d="m11 20 9-14 9 14-9 14z"></path>
-        <path fill="#2E5FDC" d="M20 34V20h-7z"></path>
-        <path fill="#1D2DC6" d="M20 34V20h7z"></path>
-        <path fill="#4576F3" d="M20 20V6l-7 14z"></path>
-        <path fill="#3346F6" d="M20 20V6l7 14z"></path>
-        <path fill="#4486EB" d="M20 34 8 20h6z"></path>
-        <path fill="#89B8FF" d="M8 20 20 6l-6 14z"></path>
-        <path fill="#0F1D9D" d="M32 20 20 34l6-14z"></path>
-        <path fill="#213DD1" d="m20 6 12 14h-6z"></path>
-    </svg>
-)
-
-// Interface for stored address details
-interface AddressDetailsData {
-    type: 'address_details'
-    address: string
-    rawAddress?: string
-    status?: string
-    isWallet?: boolean
-    interfaces?: string[]
-    lastActivity?: string
-    balance?: string
-    isScam?: boolean
-    hasError?: boolean
-}
-
-const StaticTextWrapper = ({ children }: { children: React.ReactNode; isAgent: boolean; isStreaming?: boolean }) => (
-    <>{children}</>
-)
-
-// Component to render address details message (works for both live and loaded from history)
-const AddressDetailsMessage = ({ data, animate = false }: { data: AddressDetailsData; animate?: boolean }) => {
-    const TextWrapper = animate ? AnimatedText : StaticTextWrapper
-
-    return (
-        <div className="flex flex-col gap-4">
-            {!data.hasError && data.rawAddress && (
-                <div className="text-white space-y-2 text-sm bg-black/10 p-4 rounded-xl">
-                    <h3 className="font-bold text-white mb-2 text-base">Address details</h3>
-                    <div className="flex flex-col gap-2">
-                        <span className="text-white"><span className="font-semibold">Raw address:</span> <span className="font-mono text-xs break-all">{data.rawAddress}</span></span>
-                        <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
-                        <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.isWallet ? "yes" : "no"}</span>
-                        <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces?.join(", ") || "none"}</span>
-                        <span className="text-white"><span className="font-semibold">Last activity:</span> {data.lastActivity} UTC</span>
-                        <span className="text-white"><span className="font-semibold">Balance:</span> {data.balance} TON</span>
-                        <span className="text-white"><span className="font-semibold">Is scam:</span> {data.isScam ? "yes" : "no"}</span>
-                    </div>
-                </div>
-            )}
-
-            <p className="text-white">
-                <TextWrapper isAgent={true}>
-                    Got it! I&apos;ve received the address. You can explore it by yourself on:
-                </TextWrapper>
-            </p>
-            <ExplorerLink
-                href={`https://tonviewer.com/${data.address}`}
-                icon={<TonviewerIcon />}
-            >
-                Tonviewer
-            </ExplorerLink>
-        </div>
-    )
-}
-
-// Helper to parse stored message content and reconstruct JSX if needed
-// Returns both the content and whether it's a system message
-const parseStoredMessage = (content: string): { content: React.ReactNode; isSystemMessage: boolean } => {
-    try {
-        // Try to parse as JSON first
-        if (content.startsWith('{') && content.includes('"type"')) {
-            const parsed = JSON.parse(content)
-            if (parsed.type === 'address_details') {
-                // Address details messages are system messages (no like/dislike/copy)
-                return {
-                    content: <AddressDetailsMessage data={parsed} animate={false} />,
-                    isSystemMessage: true
-                }
-            }
-        }
-    } catch {
-        // Not JSON, return as-is (will be rendered as markdown)
-    }
-    return { content, isSystemMessage: false }
 }
 
 const getApiErrorMessage = (error: unknown, fallback: string): string => {
@@ -265,227 +76,6 @@ const getApiErrorMessage = (error: unknown, fallback: string): string => {
     return fallback
 }
 
-// Streaming message component that shows tokens as they arrive
-const StreamingMessage = ({
-    content,
-    isThinking
-}: {
-    content: string
-    isThinking: boolean
-}) => {
-    const showThinkingIndicator = isThinking || !content
-
-    return (
-        <div className="flex flex-col gap-2">
-            {showThinkingIndicator && !content && (
-                <div className="flex items-center gap-2 text-white/60">
-                    <FontAwesomeIcon icon={faGear} className="animate-spin text-sm" />
-                    <span className="italic animate-pulse">
-                        {isThinking ? "Analyzing data..." : "Thinking..."}
-                    </span>
-                </div>
-            )}
-            {content && (
-                <>
-                    {isThinking && (
-                        <div className="flex items-center gap-2 text-white/60 text-sm">
-                            <FontAwesomeIcon icon={faGear} className="animate-spin text-xs" />
-                            <span className="italic">Analyzing data...</span>
-                        </div>
-                    )}
-                    <div className="break-words [overflow-wrap:break-word]">
-                        <MarkdownRenderer content={content} isUserMessage={false} isStreaming={true} />
-                        <span className="animate-pulse">▊</span>
-                    </div>
-                </>
-            )}
-        </div>
-    )
-}
-
-const MessageBubble = ({
-    role,
-    content,
-    timestamp,
-    isStreaming = false,
-    userPhotoUrl,
-    traceId,
-    onFeedback,
-    onCopy,
-    isSystemMessage = false,
-    thinkingText
-}: {
-    role: "user" | "agent"
-    content: React.ReactNode
-    timestamp: Date
-    isStreaming?: boolean
-    userPhotoUrl?: string | null
-    traceId?: string
-    onFeedback?: (score: number, traceId: string) => void
-    onCopy?: (text: string) => void
-    isSystemMessage?: boolean
-    thinkingText?: string
-}) => {
-    const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null)
-    const [showThinking, setShowThinking] = useState(false)
-
-    const handleFeedback = (score: number) => {
-        if (feedbackGiven !== null) return
-        setFeedbackGiven(score)
-        if (onFeedback) {
-            // Always call onFeedback - let parent handle missing traceId
-            onFeedback(score, traceId || '')
-        }
-    }
-
-    // Extract text content for copy purposes
-    const getTextContent = (node: React.ReactNode): string => {
-        if (typeof node === 'string') return node
-        if (Array.isArray(node)) return node.map(getTextContent).join('')
-        return ''
-    }
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            className={cn(
-                "flex w-full mb-4 px-4 gap-3 max-w-[90%] items-end",
-                role === "user" ? "flex-row-reverse ml-auto" : "flex-row"
-            )}
-        >
-            {role === "agent" && (
-                <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    <Image
-                        src={getAssetUrl("logo.svg")}
-                        alt="Agent"
-                        width={28}
-                        height={28}
-                        style={{ width: "28px", height: "28px" }}
-                        className="object-contain"
-                        loading="lazy"
-                        unoptimized
-                    />
-                </div>
-            )}
-            {role === "user" && (
-                <div className="relative w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    {userPhotoUrl ? (
-                        <LazyImage src={userPhotoUrl} alt="User" fill className="object-cover" unoptimized />
-                    ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-[#4FC3F7] to-[#0098EA] flex items-center justify-center text-white font-bold text-sm">
-                            U
-                        </div>
-                    )}
-                </div>
-            )}
-            <div className={cn(
-                "relative max-w-[85%] md:max-w-[75%] px-5 py-4 text-[16px] font-medium leading-relaxed shadow-lg transition-all",
-                role === "user"
-                    ? "bg-white text-gray-900 rounded-3xl rounded-br-sm"
-                    : "bg-[#0098EA]/20 border border-white/20 text-white rounded-3xl rounded-bl-sm ring-1 ring-white/5",
-                isStreaming && "min-h-[60px]"
-            )}>
-                {/* Collapsible Thinking Section */}
-                {role === "agent" && thinkingText && (
-                    <div className="mb-3">
-                        <button
-                            onClick={() => setShowThinking(!showThinking)}
-                            className="flex items-center gap-2 text-xs text-white/60 hover:text-white/80 transition-colors"
-                        >
-                            <motion.span
-                                animate={{ rotate: showThinking ? 90 : 0 }}
-                                transition={{ duration: 0.2 }}
-                            >
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                                    <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                                </svg>
-                            </motion.span>
-                            <span>Thinking</span>
-                        </button>
-                        <AnimatePresence>
-                            {showThinking && (
-                                <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="overflow-hidden"
-                                >
-                                    <div className="mt-2 pl-4 border-l-2 border-white/20 text-sm text-white/60 italic">
-                                        {thinkingText}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                )}
-                <motion.div
-                    initial={role === "agent" && !isStreaming ? "hidden" : "visible"}
-                    animate="visible"
-                    variants={{
-                        visible: {
-                            transition: {
-                                staggerChildren: 0.03,
-                                delayChildren: 0.1
-                            }
-                        }
-                    }}
-                    className="break-words [overflow-wrap:break-word]"
-                >
-                    {typeof content === 'string' ? (
-                        <MarkdownRenderer content={content} isUserMessage={role === 'user'} isStreaming={isStreaming} />
-                    ) : (
-                        content
-                    )}
-                </motion.div>
-                {!isStreaming && (
-                    <div className="flex items-center justify-between mt-4">
-                        <div className={cn(
-                            "text-[10px] opacity-70 font-bold tracking-tight mt-1",
-                            role === "user" ? "text-right text-gray-400" : "text-left text-white/70"
-                        )}>
-                            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-
-                        {/* Feedback and Actions - Only show if NOT a system message */}
-                        {!isSystemMessage && (
-                            <div className="flex items-center gap-1">
-                                {role === "agent" && (
-                                    <>
-                                        <ActionButton
-                                            variant="icon_agent"
-                                            onClick={() => handleFeedback(1)}
-                                            className={cn(feedbackGiven === 1 && "bg-white/30 border border-white/50")}
-                                        >
-                                            <FontAwesomeIcon icon={faThumbsUp} />
-                                        </ActionButton>
-                                        <ActionButton
-                                            variant="icon_agent"
-                                            onClick={() => handleFeedback(0)}
-                                            className={cn(feedbackGiven === 0 && "bg-white/30 border border-white/50")}
-                                        >
-                                            <FontAwesomeIcon icon={faThumbsDown} />
-                                        </ActionButton>
-                                    </>
-                                )}
-                                {/* Copy Button */}
-                                <ActionButton
-                                    variant={role === "user" ? "icon_user" : "icon_agent"}
-                                    onClick={() => onCopy?.(typeof content === 'string' ? content : getTextContent(content))}
-                                >
-                                    <FontAwesomeIcon icon={faCopy} />
-                                </ActionButton>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        </motion.div>
-    )
-}
-
-
 function ChatContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
@@ -494,6 +84,7 @@ function ChatContent() {
 
     const { isMobile, user } = useTelegram()
     const { showToast } = useToast()
+    const userId = user?.id ?? null
 
     const [messages, setMessages] = useState<Array<Message>>([])
     const [inputValue, setInputValue] = useState("")
@@ -501,7 +92,6 @@ function ChatContent() {
     const [count, setCount] = useState<number>(0)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
     const [jobId, setJobId] = useState<string | null>(null)
-    const [chatId, setChatId] = useState<string | null>(null)
     const [streamingContent, setStreamingContent] = useState("")
     const [pendingAddress, setPendingAddress] = useState<string | null>(null)
     const [currentScanType, setCurrentScanType] = useState<string | null>(null)
@@ -512,75 +102,36 @@ function ChatContent() {
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
-    const hasStartedRef = useRef(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
     const arrowUpRef = useRef<ArrowUpIconHandle>(null)
     const streamingMsgIdRef = useRef<string | null>(null)
     const userRef = useRef(user)
+    const showToastRef = useRef(showToast)
+    const messagesRef = useRef<Array<Message>>([])
     const activeSessionRef = useRef(false) // Track if messages were added during this session
-    const chatIdRef = useRef<string | null>(chatIdParam) // Initialize from URL param immediately
-    const prevChatIdParamRef = useRef<string | null>(chatIdParam) // Track URL parameter changes
-    const historyLoadedRef = useRef<string | null>(null) // Track if history has been loaded
+    const chatIdRef = useRef<string | null>(chatIdParam)
+    const prevRouteChatIdRef = useRef<string | null>(chatIdParam)
+    const activeHistoryRequestIdRef = useRef(0)
+    const activeAddressBootstrapKeyRef = useRef<string | null>(null)
+    const addressBootstrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const addressBootstrapTimeoutOwnerRef = useRef<string | null>(null)
+    const pollStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const pollStatusOwnerJobIdRef = useRef<string | null>(null)
+    const failedAutoBootstrapKeysRef = useRef<Set<string>>(new Set())
     const activeJobIdRef = useRef<string | null>(null) // Ref to track the currently active job for cleanup
 
     useEffect(() => {
         userRef.current = user
     }, [user])
 
-    // Keep chatIdRef in sync with chatId state and URL parameter
     useEffect(() => {
-        chatIdRef.current = chatId
-    }, [chatId])
+        showToastRef.current = showToast
+    }, [showToast])
 
-    // CRITICAL: Sync chatIdRef immediately when URL parameter changes
-    // This must happen synchronously before any other effects that might call ensureChatId
-    if (chatIdParam && chatIdParam !== prevChatIdParamRef.current) {
-        // Special case: If we already recovered the ID (e.g. from window fallback) and started a session,
-        // we should not reset the session or trigger a history overwrite.
-        if ((chatIdRef.current === chatIdParam && activeSessionRef.current) || globalPendingChatId === chatIdParam) {
-            console.log(`[CHAT-ID] URL param caught up to recovered ID ${chatIdParam}, preserving active session`)
-            prevChatIdParamRef.current = chatIdParam
-
-            // Ensure session is marked active if matched via globalPendingChatId
-            if (globalPendingChatId === chatIdParam) {
-                activeSessionRef.current = true
-                if (!chatIdRef.current) chatIdRef.current = chatIdParam
-            }
-
-            // Prevent loadHistory from running and overwriting the active session
-            if (historyLoadedRef.current !== chatIdParam) {
-                historyLoadedRef.current = chatIdParam
-            }
-        } else {
-            console.log(`[CHAT-ID] URL param changed from ${prevChatIdParamRef.current} to ${chatIdParam}, syncing ref immediately`)
-            chatIdRef.current = chatIdParam
-            prevChatIdParamRef.current = chatIdParam
-            // Reset all session tracking refs when navigating to a different chat
-            activeSessionRef.current = false
-            hasStartedRef.current = false
-            // Reset historyLoadedRef if navigating to a DIFFERENT chat (not the same one)
-            if (historyLoadedRef.current !== chatIdParam) {
-                historyLoadedRef.current = null
-            }
-        }
-    } else if (!chatIdParam && prevChatIdParamRef.current) {
-        // Navigating away from an existing chat to new chat
-        console.log(`[CHAT-ID] URL param cleared, resetting for new chat`)
-        prevChatIdParamRef.current = null
-        chatIdRef.current = null // Clear ref so new ID will be created
-        activeSessionRef.current = false
-        hasStartedRef.current = false
-        historyLoadedRef.current = null
-
-        // Reset Chat State
-        setJobId(null)
-        activeJobIdRef.current = null
-        setMessages([])
-        setIsFavourite(false)
-        setPendingAddress(null)
-        setCurrentAddress(null)
-    }
+    useEffect(() => {
+        messagesRef.current = messages
+    }, [messages])
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -589,6 +140,47 @@ function ChatContent() {
     useEffect(() => {
         scrollToBottom()
     }, [messages, streamingContent])
+
+    // Reset volatile state when route switches to a different chat.
+    useEffect(() => {
+        if (prevRouteChatIdRef.current === chatIdParam) return
+        prevRouteChatIdRef.current = chatIdParam
+
+        // Preserve in-flight session state when URL catches up after ensureChatId().
+        if (chatIdParam && activeSessionRef.current && chatIdRef.current === chatIdParam) {
+            return
+        }
+
+        chatIdRef.current = chatIdParam
+        activeSessionRef.current = false
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+            abortControllerRef.current = null
+        }
+        setIsLoading(false)
+        setJobId(null)
+        activeJobIdRef.current = null
+        if (pollStatusTimeoutRef.current) {
+            clearTimeout(pollStatusTimeoutRef.current)
+            pollStatusTimeoutRef.current = null
+        }
+        pollStatusOwnerJobIdRef.current = null
+        setMessages([])
+        setStreamingContent("")
+        streamingMsgIdRef.current = null
+        setPendingAddress(null)
+        setCurrentAddress(null)
+        setCurrentScanType(null)
+        setAwaitingTransactionLimit(false)
+        setCount(0)
+        setIsFavourite(false)
+        if (addressBootstrapTimeoutRef.current) {
+            clearTimeout(addressBootstrapTimeoutRef.current)
+            addressBootstrapTimeoutRef.current = null
+            addressBootstrapTimeoutOwnerRef.current = null
+        }
+        failedAutoBootstrapKeysRef.current.clear()
+    }, [chatIdParam])
 
 
 
@@ -608,7 +200,19 @@ function ChatContent() {
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort()
+                abortControllerRef.current = null
             }
+            if (addressBootstrapTimeoutRef.current) {
+                clearTimeout(addressBootstrapTimeoutRef.current)
+                addressBootstrapTimeoutRef.current = null
+                addressBootstrapTimeoutOwnerRef.current = null
+            }
+            if (pollStatusTimeoutRef.current) {
+                clearTimeout(pollStatusTimeoutRef.current)
+                pollStatusTimeoutRef.current = null
+            }
+            pollStatusOwnerJobIdRef.current = null
+            activeAddressBootstrapKeyRef.current = null
             // Cancel any in-progress job when leaving chat
             if (activeJobIdRef.current) {
                 cancelJob(activeJobIdRef.current)
@@ -671,154 +275,127 @@ function ChatContent() {
         }
     }
 
-
-    // Load Chat History
-    useEffect(() => {
-        const loadHistory = async () => {
-            if (!chatIdParam) {
-                return
-            }
-
-            // If we have an addressParam AND we have pending global messages for this chat,
-            // we skip loading history to use the fresh in-memory state.
-            // Otherwise (e.g. refresh, or old chat with address param), we should load history.
-            if (addressParam && globalPendingChatId === chatIdParam) {
-                console.log(`[CHAT] Skipping history load - using pending in-memory state`)
-                historyLoadedRef.current = chatIdParam
-                chatIdRef.current = chatIdParam
-                return
-            }
-
-            // Prevent duplicate loading for the same chat
-            if (historyLoadedRef.current === chatIdParam) {
-                console.log(`[CHAT] History already loaded for chat ${chatIdParam}, skipping`)
-                // Ensure ref is in sync even when skipping
-                if (!chatIdRef.current) chatIdRef.current = chatIdParam
-                return
-            }
-
-            // If this is an active session where messages were added, don't overwrite them
-            if (activeSessionRef.current) {
-                console.log(`[CHAT] Skipping history load - active session in progress`)
-                historyLoadedRef.current = chatIdParam
-                // Even when skipping, ensure ref is in sync with URL param
-                if (!chatIdRef.current) {
-                    chatIdRef.current = chatIdParam
-                    console.log(`[CHAT] Synced chatIdRef to URL param: ${chatIdParam}`)
-                }
-                return
-            }
-
-            // Wait for user to be authenticated to verify ownership
-            if (!user) return
-
-            console.log(`[CHAT] Loading history for chat ${chatIdParam}`)
-            historyLoadedRef.current = chatIdParam
-            setChatId(chatIdParam)
-            chatIdRef.current = chatIdParam // CRITICAL: Also set the ref to prevent new ID creation!
-            setIsLoading(true)
-
-            try {
-                const apiUrl = getApiUrl()
-
-                // 1. Get Metadata to restore job_id
-                const metaResponse = await axios.get(`${apiUrl}/api/chat/${chatIdParam}`, {
-                    params: { user_id: user.id }
-                })
-
-                if (metaResponse.data.error) {
-                    throw new Error(metaResponse.data.error)
-                }
-
-                if (metaResponse.data && !metaResponse.data.error) {
-                    if (metaResponse.data.job_id) {
-                        setJobId(metaResponse.data.job_id)
-                        activeJobIdRef.current = metaResponse.data.job_id
-                    }
-                    // Set address from metadata so star button works
-                    if (metaResponse.data.address) {
-                        setCurrentAddress(metaResponse.data.address)
-                    }
-                }
-
-                // 2. Get Messages
-                const historyResponse = await axios.get(`${apiUrl}/api/chat/${chatIdParam}/history`, {
-                    params: { user_id: user.id }
-                })
-
-                if (historyResponse.data.error) {
-                    throw new Error(historyResponse.data.error)
-                }
-
-                if (historyResponse.data.messages) {
-                    const loadedMessages = historyResponse.data.messages.map((msg: { message_id?: string, role: "user" | "agent", content: string, created_at: string, trace_id?: string }) => {
-                        const parsed = parseStoredMessage(msg.content)
-                        return {
-                            id: msg.message_id || Math.random().toString(36),
-                            role: msg.role,
-                            content: parsed.content,
-                            timestamp: new Date(msg.created_at),
-                            traceId: msg.trace_id,
-                            isSystemMessage: parsed.isSystemMessage
-                        }
-                    })
-                    console.log(`[CHAT] Loaded ${loadedMessages.length} messages from history`)
-                    setMessages(loadedMessages)
-                }
-
-            } catch (error) {
-                console.error("Failed to load history:", error)
-                historyLoadedRef.current = null // Reset so it can retry
-                const errorMsg = getApiErrorMessage(error, "Unknown error")
-
-                if (errorMsg.includes("Access denied")) {
-                    showToast("Access denied: you cannot view this chat", "error")
-                    // Redirect to explore after a delay
-                    setTimeout(() => router.push('/explore'), 2000)
-                } else {
-                    showToast("Failed to load chat history", "error")
-                }
-            } finally {
-                setIsLoading(false)
-            }
-        }
-
-        loadHistory()
-    }, [chatIdParam, user, addressParam, router, showToast])
-
     // Generate Chat ID if needed when starting interaction
     const ensureChatId = useCallback(() => {
-        // Use ref to get the latest value, avoiding stale closures
         if (chatIdRef.current) {
             console.log(`[CHAT-ID] Returning existing chatId: ${chatIdRef.current}`)
             return chatIdRef.current
         }
 
-        // Fallback: Check if URL actually has an ID (client-side only check)
-        // This handles cases where useSearchParams() or routing is lagging behind the actual URL
-        if (typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search)
-            const urlId = urlParams.get('chat_id')
-            if (urlId) {
-                console.log(`[CHAT-ID] Recovered ID from existing URL: ${urlId}`)
-                chatIdRef.current = urlId
-                setChatId(urlId)
-                return urlId
-            }
+        if (chatIdParam) {
+            chatIdRef.current = chatIdParam
+            return chatIdParam
         }
 
         const newId = crypto.randomUUID()
         console.log(`[CHAT-ID] Creating NEW chatId: ${newId}`)
-        console.trace('[CHAT-ID] Stack trace for new ID creation')
-        setChatId(newId)
-        chatIdRef.current = newId // Update ref immediately
-        globalPendingChatId = newId // Set global immediately to prevent race conditions during URL update
-        // Update URL without reload
-        const newUrl = new URL(window.location.href)
-        newUrl.searchParams.set('chat_id', newId)
-        window.history.pushState({}, '', newUrl.toString())
+        chatIdRef.current = newId
+
+        router.replace(buildChatRoute(newId, addressParam))
         return newId
-    }, [setChatId])
+    }, [addressParam, chatIdParam, router])
+
+    // Load chat history / bootstrap address chat deterministically.
+    useEffect(() => {
+        let cancelled = false
+
+        const loadHistory = async () => {
+            if (!chatIdParam && addressParam) {
+                ensureChatId()
+                return
+            }
+
+            if (!chatIdParam) {
+                if (messagesRef.current.length === 0) {
+                    setMessages([{
+                        id: crypto.randomUUID(),
+                        role: "agent",
+                        content: "Welcome! Share a TON wallet address to start the analysis.",
+                        timestamp: new Date(),
+                        isSystemMessage: true,
+                        metaKey: "welcome"
+                    }])
+                }
+                return
+            }
+
+            if (!userId) return
+
+            const requestId = ++activeHistoryRequestIdRef.current
+            console.log(`[CHAT] Loading history for chat ${chatIdParam}`)
+            chatIdRef.current = chatIdParam
+            setIsLoading(true)
+
+            try {
+                const { meta, history } = await fetchChatBootstrap(chatIdParam, userId)
+
+                if (cancelled || requestId !== activeHistoryRequestIdRef.current) {
+                    return
+                }
+
+                if (meta.error) {
+                    throw new Error(meta.error)
+                }
+                if (history.error) {
+                    throw new Error(history.error)
+                }
+
+                if (meta && !meta.error) {
+                    if (meta.job_id) {
+                        setJobId(meta.job_id)
+                        activeJobIdRef.current = meta.job_id
+                    }
+                    if (meta.address) {
+                        setCurrentAddress(meta.address)
+                    }
+                }
+
+                const historyMessages = Array.isArray(history.messages)
+                    ? history.messages
+                    : []
+
+                if (historyMessages.length > 0) {
+                    const loadedMessages = mapStoredHistoryToMessages(historyMessages, parseStoredMessage)
+                    console.log(`[CHAT] Loaded ${loadedMessages.length} messages from history`)
+                    setMessages(loadedMessages)
+                } else {
+                    setMessages([])
+                }
+
+                if (addressParam) {
+                    const bootstrapState = getAddressBootstrapState(historyMessages, addressParam)
+                    const bootstrapKey = `${chatIdParam}:${addressParam}`
+
+                    if (bootstrapState.shouldBootstrap && !failedAutoBootstrapKeysRef.current.has(bootstrapKey)) {
+                        await handleAddressReceived(addressParam, {
+                            persistSearchMessage: bootstrapState.persistSearchMessage,
+                            source: "auto"
+                        })
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load history:", error)
+                const errorMsg = getApiErrorMessage(error, "Unknown error")
+
+                if (errorMsg.includes("Access denied")) {
+                    showToastRef.current("Access denied: you cannot view this chat", "error")
+                    setTimeout(() => router.push('/explore'), 2000)
+                } else {
+                    showToastRef.current("Failed to load chat history", "error")
+                }
+            } finally {
+                if (!cancelled && requestId === activeHistoryRequestIdRef.current) {
+                    setIsLoading(false)
+                }
+            }
+        }
+
+        void loadHistory()
+        return () => {
+            cancelled = true
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addressParam, chatIdParam, ensureChatId, router, userId])
 
     // Get scan type label for messages
     const getScanTypeLabel = (scanType: string) => {
@@ -857,15 +434,45 @@ function ChatContent() {
 
     // Existing Polling Logic
     const pollStatus = async (jobId: string, scanType: string, targetAddress: string) => {
+        const isCurrentJob = () => activeJobIdRef.current === jobId
+
+        if (!isCurrentJob()) {
+            return
+        }
+
         try {
             const apiUrl = getApiUrl()
             const response = await axios.get(`${apiUrl}/api/status/${jobId}`)
+            if (!isCurrentJob()) {
+                return
+            }
             const data = response.data
 
             if (data.status === "processing" || data.status === "queued") {
                 setCount(data.count || 0)
-                setTimeout(() => pollStatus(jobId, scanType, targetAddress), 1000)
+                if (isCurrentJob()) {
+                    if (
+                        pollStatusTimeoutRef.current &&
+                        pollStatusOwnerJobIdRef.current === jobId
+                    ) {
+                        clearTimeout(pollStatusTimeoutRef.current)
+                        pollStatusTimeoutRef.current = null
+                        pollStatusOwnerJobIdRef.current = null
+                    }
+                    pollStatusOwnerJobIdRef.current = jobId
+                    pollStatusTimeoutRef.current = setTimeout(() => {
+                        if (
+                            pollStatusOwnerJobIdRef.current === jobId &&
+                            activeJobIdRef.current === jobId
+                        ) {
+                            void pollStatus(jobId, scanType, targetAddress)
+                        }
+                    }, 1000)
+                }
             } else if (data.status === "success") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 setJobId(jobId)
 
@@ -889,12 +496,18 @@ function ChatContent() {
                             role: "user",
                             content: userMessage
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                         // 2. Save Agent Message (analysis complete)
                         await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                             role: "agent",
                             content: agentMarkdown
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                         // Update chat with job_id (without re-initializing)
                         await axios.post(`${apiUrl}/api/chat/init`, {
@@ -903,12 +516,18 @@ function ChatContent() {
                             job_id: jobId,
                             address: targetAddress
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                     } catch (e) {
                         console.error("Failed to save messages:", e)
                     }
                 }
 
+                if (!isCurrentJob()) {
+                    return
+                }
 
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
@@ -925,26 +544,64 @@ function ChatContent() {
                 ), false, undefined, true)
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "empty") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 addMessage("agent", `I couldn't find any ${getScanTypeLabel(scanType)} for this address.`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "error") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 addMessage("agent", `Error: ${data.error || "Failed to generate history"}`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "cancelled") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job was cancelled
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             }
         } catch (err) {
+            if (!isCurrentJob()) {
+                return
+            }
             console.error("[SCAN] Connection to background service lost:", err)
             setIsLoading(false)
             removeLoadingMessage()
             addMessage("agent", "Connection to background service lost.", false, undefined, true)
+            activeJobIdRef.current = null
+            if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                clearTimeout(pollStatusTimeoutRef.current)
+                pollStatusTimeoutRef.current = null
+            }
+            pollStatusOwnerJobIdRef.current = null
         }
     }
 
@@ -968,6 +625,7 @@ function ChatContent() {
 
             if (response.data.job_id) {
                 activeJobIdRef.current = response.data.job_id  // Track active job for cleanup
+                pollStatusOwnerJobIdRef.current = response.data.job_id
                 pollStatus(response.data.job_id, scanType, targetAddress)
             }
         } catch (error) {
@@ -976,183 +634,6 @@ function ChatContent() {
             addMessage("agent", errorMsg, false, undefined, true)
             setIsLoading(false)
         }
-    }
-
-    // Handle address detection and show acknowledgment
-    const handleAddressReceived = async (address: string) => {
-        if (globalProcessingAddress === address) return
-        globalProcessingAddress = address
-
-        // Mark session as active to prevent history load from overwriting initial state
-        activeSessionRef.current = true
-
-        setPendingAddress(address)
-        setCurrentAddress(address)
-
-        // Show loading state for wallet info
-        const loadingId = Math.random().toString(36).substr(2, 9)
-        setMessages(prev => [...prev, {
-            id: loadingId,
-            role: "agent",
-            content: (
-                <div className="flex items-center gap-2 text-white/80">
-                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-                    <span>Fetching account details...</span>
-                </div>
-            ),
-            timestamp: new Date(),
-            isSystemMessage: true
-        }])
-
-        try {
-            const apiUrl = getApiUrl()
-            const response = await axios.post(`${apiUrl}/api/account_summary`, { address })
-
-            // Remove loading message
-            setMessages(prev => prev.filter(m => m.id !== loadingId))
-
-            if (response.data.error) {
-                // Fallback if error
-                addMessage("agent", (
-                    <AddressDetailsMessage
-                        data={{
-                            type: 'address_details',
-                            address: address,
-                            hasError: true
-                        }}
-                        animate={true}
-                    />
-                ), false, undefined, true)
-            } else {
-                const data = response.data
-                const lastActivity = new Date(data.last_activity * 1000).toUTCString().replace(' GMT', '');
-                const balance = (data.balance / 1000000000).toFixed(2)
-
-                addMessage("agent", (
-                    <AddressDetailsMessage
-                        data={{
-                            type: 'address_details',
-                            address: address,
-                            rawAddress: data.address,
-                            status: data.status,
-                            isWallet: data.is_wallet,
-                            interfaces: data.interfaces,
-                            lastActivity: lastActivity,
-                            balance: balance,
-                            isScam: data.is_scam,
-                            hasError: false
-                        }}
-                        animate={true}
-                    />
-                ), false, undefined, true)
-
-                // Save to backend for history - use centralized chat ID management
-                const currentChatId = ensureChatId()
-
-                // Save state globally to survive potential component remounts updates
-                globalPendingChatId = currentChatId
-
-                // Construct the result message for global storage
-                const resultMessage = {
-                    id: (Date.now() + 1).toString(),
-                    role: "agent" as const, // Explicitly type as "agent"
-                    content: (
-                        <AddressDetailsMessage
-                            data={{
-                                type: 'address_details',
-                                address: address,
-                                rawAddress: data.address,
-                                status: data.status,
-                                isWallet: data.is_wallet,
-                                interfaces: data.interfaces,
-                                lastActivity: lastActivity,
-                                balance: balance,
-                                isScam: data.is_scam,
-                                hasError: false
-                            }}
-                            animate={true}
-                        />
-                    ),
-                    timestamp: new Date(),
-                    isSystemMessage: true
-                }
-
-                console.log(`[CHAT] Constructing globalPendingMessages with 2 items`)
-                globalPendingMessages = [
-                    ...messages.filter(m => m.id !== loadingId), // Remove loading message from history
-                    {
-                        id: Date.now().toString(),
-                        role: "user" as const,
-                        content: `Address: ${address}`,
-                        timestamp: new Date()
-                    },
-                    resultMessage
-                ]
-
-                if (userRef.current) {
-                    try {
-                        // Reconstruct data object for backend storage
-                        const addressDetailsJson: AddressDetailsData = {
-                            type: 'address_details',
-                            address: address,
-                            rawAddress: data.address,
-                            status: data.status,
-                            isWallet: data.is_wallet,
-                            interfaces: data.interfaces,
-                            lastActivity: lastActivity,
-                            balance: balance,
-                            isScam: data.is_scam,
-                            hasError: !!data.error
-                        }
-
-                        // 1. Init chat
-                        await axios.post(`${apiUrl}/api/chat/init`, {
-                            chat_id: currentChatId,
-                            user_id: userRef.current.id,
-                            title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
-                            address: address
-                        })
-
-                        // 2. Save user message (the address they entered)
-                        // Note: Backend expects "Address: " or "Search: " - consistent with UI
-                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
-                            role: "user",
-                            content: `Search: ${address}`
-                        })
-
-                        // 3. Save agent response as JSON
-                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
-                            role: "agent",
-                            content: JSON.stringify(addressDetailsJson)
-                        })
-                    } catch (e) {
-                        console.error("Failed to save address details to history:", e)
-                    }
-                }
-            }
-        } catch (err) {
-            console.error("[ACCOUNT] Failed to fetch account summary:", err)
-            // Remove loading message
-            setMessages(prev => prev.filter(m => m.id !== loadingId))
-            // Fallback (same as error above)
-            addMessage("agent", (
-                <AddressDetailsMessage
-                    data={{
-                        type: 'address_details',
-                        address: address,
-                        hasError: true
-                    }}
-                    animate={true}
-                />
-            ), false, undefined, true)
-        }
-
-        // After a short delay, show scan type selection
-        setTimeout(() => {
-            showScanTypeSelection(address)
-            // Reset global lock after standard delay to allow reprocessing if needed later
-            globalProcessingAddress = null
-        }, 500)
     }
 
     // Show scan type selection buttons
@@ -1194,7 +675,151 @@ function ChatContent() {
                     </motion.div>
                 </div>
             </div>
-        ), false, undefined, true)
+        ), false, undefined, true, `scan-options:${address}`)
+    }
+
+    // Handle address detection and show acknowledgment
+    const handleAddressReceived = async (address: string, options: AddressBootstrapOptions = {}) => {
+        const currentChatId = ensureChatId()
+        const bootstrapKey = `${currentChatId}:${address}`
+        const loadingMetaKey = `address-loading:${bootstrapKey}`
+        const addressDetailsMetaKey = `address-details:${bootstrapKey}`
+        const searchPrompt = `Search: ${address}`
+        const persistSearchMessage = options.persistSearchMessage ?? true
+        const source = options.source ?? "manual"
+        const isActiveBootstrap = () => activeAddressBootstrapKeyRef.current === bootstrapKey
+
+        if (source === "manual") {
+            failedAutoBootstrapKeysRef.current.delete(bootstrapKey)
+        } else if (failedAutoBootstrapKeysRef.current.has(bootstrapKey)) {
+            return
+        }
+
+        if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
+            return
+        }
+        activeAddressBootstrapKeyRef.current = bootstrapKey
+
+        // Mark session as active to prevent history overwrite while bootstrapping.
+        activeSessionRef.current = true
+        setPendingAddress(address)
+        setCurrentAddress(address)
+
+        const hasSearchPromptInUi = messagesRef.current.some(
+            msg => msg.role === "user" && typeof msg.content === "string" && msg.content.trim() === searchPrompt
+        )
+        if (!hasSearchPromptInUi) {
+            addMessage("user", searchPrompt, false, undefined, false, `search:${bootstrapKey}`)
+        }
+
+        addMessage("agent", (
+            <div className="flex items-center gap-2 text-white/80">
+                <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                <span>Fetching account details...</span>
+            </div>
+        ), false, undefined, true, loadingMetaKey)
+
+        try {
+            if (userRef.current) {
+                try {
+                    await initChat({
+                        chatId: currentChatId,
+                        userId: userRef.current.id,
+                        title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
+                        address
+                    })
+                    if (!isActiveBootstrap()) return
+
+                    if (persistSearchMessage) {
+                        await saveChatMessage(currentChatId, {
+                            role: "user",
+                            content: searchPrompt,
+                            idempotency_key: `bootstrap:user:${bootstrapKey}`
+                        })
+                        if (!isActiveBootstrap()) return
+                    }
+                } catch (saveError) {
+                    console.error("Failed to initialize chat before summary fetch:", saveError)
+                }
+            }
+
+            if (!isActiveBootstrap()) return
+
+            const response = await retryWithBackoff(
+                () => requestAccountSummary(address),
+                3,
+                400
+            )
+            if (!isActiveBootstrap()) return
+            setMessages(prev => prev.filter(m => m.metaKey !== loadingMetaKey))
+
+            let addressDetailsJson: AddressDetailsData
+            if (response.data.error) {
+                addressDetailsJson = buildErrorAddressDetails(address)
+            } else {
+                addressDetailsJson = buildAddressDetailsFromSummary(address, response.data)
+            }
+
+            addMessage("agent", (
+                <AddressDetailsMessage
+                    data={addressDetailsJson}
+                    animate={true}
+                />
+            ), false, undefined, true, addressDetailsMetaKey)
+
+            if (userRef.current) {
+                try {
+                    await saveChatMessage(currentChatId, {
+                        role: "agent",
+                        content: JSON.stringify(addressDetailsJson),
+                        idempotency_key: `bootstrap:agent:${bootstrapKey}`
+                    })
+                    if (!isActiveBootstrap()) return
+                } catch (saveError) {
+                    console.error("Failed to save address details to history:", saveError)
+                }
+            }
+            if (!isActiveBootstrap()) return
+            failedAutoBootstrapKeysRef.current.delete(bootstrapKey)
+        } catch (err) {
+            if (!isActiveBootstrap()) return
+            console.error("[ACCOUNT] Failed to fetch account summary:", err)
+            if (source === "auto") {
+                failedAutoBootstrapKeysRef.current.add(bootstrapKey)
+            }
+            setMessages(prev => prev.filter(m => m.metaKey !== loadingMetaKey))
+            addMessage("agent", (
+                <AddressDetailsMessage
+                    data={buildErrorAddressDetails(address)}
+                    animate={true}
+                />
+            ), false, undefined, true, addressDetailsMetaKey)
+        } finally {
+            if (isActiveBootstrap()) {
+                if (
+                    addressBootstrapTimeoutRef.current &&
+                    addressBootstrapTimeoutOwnerRef.current === bootstrapKey
+                ) {
+                    clearTimeout(addressBootstrapTimeoutRef.current)
+                    addressBootstrapTimeoutRef.current = null
+                    addressBootstrapTimeoutOwnerRef.current = null
+                }
+                addressBootstrapTimeoutRef.current = setTimeout(() => {
+                    if (
+                        addressBootstrapTimeoutOwnerRef.current === bootstrapKey &&
+                        isActiveBootstrap()
+                    ) {
+                        addressBootstrapTimeoutRef.current = null
+                        addressBootstrapTimeoutOwnerRef.current = null
+                        showScanTypeSelection(address)
+                        if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
+                            activeAddressBootstrapKeyRef.current = null
+                        }
+                    }
+                }, 500)
+                addressBootstrapTimeoutOwnerRef.current = bootstrapKey
+            }
+        }
     }
 
     // Handle scan type button click
@@ -1276,25 +901,30 @@ function ChatContent() {
 
 
 
-    const addMessage = (role: "user" | "agent", content: React.ReactNode, isStreaming = false, traceId?: string, isSystemMessage = false) => {
+    const addMessage = (
+        role: "user" | "agent",
+        content: React.ReactNode,
+        isStreaming = false,
+        traceId?: string,
+        isSystemMessage = false,
+        metaKey?: string
+    ) => {
         // Mark that we're in an active session to prevent loadHistory from overwriting
         activeSessionRef.current = true
-        setMessages(prev => [
-            ...prev.filter(m => m.content !== "collecting" && m.content !== "thinking"),
-            {
-                id: Math.random().toString(36).substr(2, 9),
-                role,
-                content,
-                timestamp: new Date(),
-                isStreaming,
-                traceId,
-                isSystemMessage
-            }
-        ])
+        setMessages(prev => appendMessage(prev, {
+            id: Math.random().toString(36).substring(2, 11),
+            role,
+            content,
+            timestamp: new Date(),
+            isStreaming,
+            traceId,
+            isSystemMessage,
+            metaKey
+        }))
     }
 
     const removeLoadingMessage = () => {
-        setMessages(prev => prev.filter(m => m.content !== "collecting" && m.content !== "thinking"))
+        setMessages(removeTransientMessages)
     }
 
     // Stream chat with SSE
@@ -1562,7 +1192,7 @@ function ChatContent() {
             // Check if it's an address
             if (text.length > 20 && (text.startsWith("EQ") || text.startsWith("UQ") || text.startsWith("0:"))) {
                 // Don't start scanning immediately - show address acknowledgment first
-                handleAddressReceived(text)
+                handleAddressReceived(text, { source: "manual" })
             } else if (pendingAddress) {
                 // User typed something else while we have a pending address
                 addMessage("agent", "Please select one of the scan options above, or paste a new TON address.", false, undefined, true)
@@ -1586,91 +1216,6 @@ function ChatContent() {
             handleSend()
         }
     }
-
-    useEffect(() => {
-        // Skip if we're loading an existing chat from history
-        // The loadHistory effect will handle setting up messages, and
-        // chatIdRef is now synced synchronously at the top of the component
-        if (chatIdParam) {
-            hasStartedRef.current = true
-
-            // Check if we need to restore state after URL update for new chat (handles remounts)
-            if (globalPendingChatId === chatIdParam && globalPendingMessages) {
-                const lastMsg = globalPendingMessages[globalPendingMessages.length - 1]
-                // Check if the content is our result component
-                // @ts-expect-error - accessing internal react element type
-                const isResult = lastMsg?.content?.type === AddressDetailsMessage
-
-                if (isResult) {
-                    console.log(`[CHAT] Restoring finished result for ${chatIdParam}. Items: ${globalPendingMessages.length}`)
-                    setMessages(globalPendingMessages)
-                    activeSessionRef.current = true
-                    historyLoadedRef.current = chatIdParam
-
-                    // Show scan options since we restored the result
-                    if (addressParam) {
-                        setTimeout(() => showScanTypeSelection(addressParam), 500)
-                    }
-                } else {
-                    console.log(`[CHAT] Restoring interrupted fetch - restarting process`)
-                    // The fetch was interrupted (e.g. component remounted while fetching),
-                    // so we need to restart it safely
-                    globalProcessingAddress = null
-                    if (addressParam) {
-                        handleAddressReceived(addressParam)
-                    }
-                }
-
-                // Clear globals
-                globalPendingChatId = null
-                globalPendingMessages = null
-            }
-            return
-        }
-
-        // Fallback: Check if URL actually has an ID (client-side only check)
-        // If an ID exists in the URL (even if useSearchParams is lagging), 
-        // we treat this as a "History Mode" session and AVOID starting a new search/welcome flow.
-        // This prevents duplicate execution of handleAddressReceived (double-saving) on remounts.
-        let hasUrlId = false
-        if (typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search)
-            if (urlParams.get('chat_id')) hasUrlId = true
-        }
-
-        if (hasUrlId) {
-            console.log("[CHAT] ID found in window.location, skipping initialization (waiting for chatIdParam)")
-            hasStartedRef.current = true
-
-            // Restore state from global backup if available (handles remounts)
-            if (globalPendingChatId && globalPendingMessages) {
-                // Check if the URL ID matches our pending ID
-                const urlParams = new URLSearchParams(window.location.search)
-                if (urlParams.get('chat_id') === globalPendingChatId) {
-                    console.log("[CHAT] Restoring state from global pending storage after remount")
-                    setMessages(globalPendingMessages)
-                    chatIdRef.current = globalPendingChatId
-                    activeSessionRef.current = true
-                    historyLoadedRef.current = globalPendingChatId
-                    // Clear globals
-                    globalPendingChatId = null
-                    globalPendingMessages = null
-                }
-            }
-            return
-        }
-
-        if (addressParam && !hasStartedRef.current) {
-            hasStartedRef.current = true
-            addMessage("user", `Search: ${addressParam}`)
-            // Use new flow for URL parameter too
-            handleAddressReceived(addressParam)
-        } else if (!hasStartedRef.current) {
-            hasStartedRef.current = true
-            addMessage("agent", "Welcome! Share a TON wallet address to start the analysis.", false, undefined, true)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [addressParam, chatIdParam])
 
     return (
         <div className="relative w-full h-[100dvh] flex flex-col">
