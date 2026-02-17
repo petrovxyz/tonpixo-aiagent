@@ -253,6 +253,24 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: Optional[dict] = Non
             print(f"[DB] Removed {duplicates_found} duplicate chat entries")
         
         result_items = deduplicated_items[:limit]
+        has_more_results = len(deduplicated_items) > limit or bool(next_key)
+        if has_more_results and result_items:
+            last_item = result_items[-1]
+            chat_id = last_item.get('chat_id')
+            updated_at = last_item.get('updated_at')
+            item_user_id = last_item.get('user_id')
+            if chat_id and updated_at and item_user_id:
+                next_key = {
+                    'chat_id': chat_id,
+                    'user_id': item_user_id,
+                    'updated_at': updated_at,
+                }
+                query_params['ExclusiveStartKey'] = next_key
+            else:
+                print(f"[DB] Could not build pagination key from last deduplicated item: {last_item}")
+        elif not has_more_results:
+            next_key = None
+
         print(f"[DB] Returning {len(result_items)} deduplicated items")
         return result_items, next_key
     except ClientError as e:

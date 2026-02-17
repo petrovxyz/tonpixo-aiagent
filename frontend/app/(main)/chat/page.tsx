@@ -508,18 +508,20 @@ function ChatContent() {
 
                         // Chat already initialized in handleAddressReceived - just save messages
                         // 1. Save User Message (scan type selection)
-                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                        await saveChatMessage(currentChatId, {
                             role: "user",
-                            content: userMessage
+                            content: userMessage,
+                            idempotency_key: `${jobId}:user`
                         })
                         if (!isCurrentJob()) {
                             return
                         }
 
                         // 2. Save Agent Message (analysis complete)
-                        await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
+                        await saveChatMessage(currentChatId, {
                             role: "agent",
-                            content: agentMarkdown
+                            content: agentMarkdown,
+                            idempotency_key: `${jobId}:agent`
                         })
                         if (!isCurrentJob()) {
                             return
@@ -624,11 +626,12 @@ function ChatContent() {
     const startSearch = async (targetAddress: string, scanType: string, limit?: number) => {
         setIsLoading(true)
         setCurrentScanType(scanType)
-        setMessages(prev => [...prev.filter(m => m.content !== "collecting"), {
+        setMessages(prev => [...prev.filter(m => m.metaKey !== "transient:collecting"), {
             id: "loading-state-" + Date.now(),
             role: "agent",
             content: "collecting",
-            timestamp: new Date()
+            timestamp: new Date(),
+            metaKey: "transient:collecting"
         }])
 
         try {
@@ -724,7 +727,7 @@ function ChatContent() {
         const hasSearchPromptInUi = messagesRef.current.some(
             msg => msg.role === "user" && typeof msg.content === "string" && msg.content.trim() === searchPrompt
         )
-        if (!hasSearchPromptInUi) {
+        if (persistSearchMessage && !hasSearchPromptInUi) {
             addMessage("user", searchPrompt, false, undefined, false, `search:${bootstrapKey}`)
         }
 
@@ -1241,7 +1244,7 @@ function ChatContent() {
                     <AnimatePresence initial={true}>
                         {messages.map((msg) => (
                             <div key={msg.id}>
-                                {msg.content === "collecting" ? (
+                                {msg.metaKey === "transient:collecting" ? (
                                     <MessageBubble role="agent" timestamp={msg.timestamp} userPhotoUrl={user?.photo_url} isSystemMessage={true} content={
                                         <div className="flex items-center gap-4">
                                             <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
@@ -1257,7 +1260,7 @@ function ChatContent() {
                                             </div>
                                         </div>
                                     } />
-                                ) : msg.content === "thinking" ? (
+                                ) : msg.metaKey === "transient:thinking" ? (
                                     <MessageBubble role="agent" timestamp={msg.timestamp} userPhotoUrl={user?.photo_url} content={
                                         <div className="flex items-center gap-2 text-white/80">
                                             <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
@@ -1395,7 +1398,7 @@ function ChatContent() {
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="Ask something..."
-                                disabled={isLoading && messages.some(m => m.content === "collecting")}
+                                disabled={isLoading && messages.some(m => m.metaKey === "transient:collecting")}
                                 className="flex-1 bg-transparent border-none outline-none px-3 py-3 text-white placeholder:text-white/40 text-base md:text-lg min-w-0 font-medium z-10"
                                 autoComplete="off"
                             />
@@ -1405,7 +1408,7 @@ function ChatContent() {
                                     arrowUpRef.current?.startAnimation();
                                     handleSend();
                                 }}
-                                disabled={!inputValue.trim() || (isLoading && messages.some(m => m.content === "collecting"))}
+                                disabled={!inputValue.trim() || (isLoading && messages.some(m => m.metaKey === "transient:collecting"))}
                                 className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white hover:bg-gray-100 text-[#0098EA] rounded-full active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-lg cursor-pointer z-10"
                             >
                                 <ArrowUpIcon ref={arrowUpRef} size={22} />

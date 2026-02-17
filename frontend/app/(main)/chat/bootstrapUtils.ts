@@ -15,7 +15,7 @@ export interface ParsedStoredMessage {
 }
 
 export const removeTransientMessages = (messages: Message[]): Message[] =>
-    messages.filter(m => m.content !== "collecting" && m.content !== "thinking")
+    messages.filter(m => !m.metaKey?.startsWith("transient:"))
 
 export const appendMessage = (messages: Message[], message: Message): Message[] => {
     const base = removeTransientMessages(messages)
@@ -77,6 +77,10 @@ export const retryWithBackoff = async <T>(
     maxAttempts = 3,
     baseDelayMs = 400
 ): Promise<T> => {
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+        throw new TypeError(`retryWithBackoff: invalid maxAttempts ${maxAttempts}`)
+    }
+
     let lastError: unknown = null
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -92,4 +96,3 @@ export const retryWithBackoff = async <T>(
 
     throw lastError
 }
-

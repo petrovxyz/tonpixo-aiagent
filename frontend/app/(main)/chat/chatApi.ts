@@ -41,15 +41,23 @@ export const initChat = async (params: {
     chatId: string
     userId: number
     title: string
-    address: string
+    address?: string
 }) => {
     const apiUrl = getApiUrl()
-    await axios.post(`${apiUrl}/api/chat/init`, {
+    const payload: {
+        chat_id: string
+        user_id: number
+        title: string
+        address?: string
+    } = {
         chat_id: params.chatId,
         user_id: params.userId,
-        title: params.title,
-        address: params.address
-    })
+        title: params.title
+    }
+    if (params.address !== undefined) {
+        payload.address = params.address
+    }
+    await axios.post(`${apiUrl}/api/chat/init`, payload)
 }
 
 export const saveChatMessage = async (chatId: string, payload: SaveChatMessagePayload) => {
@@ -61,4 +69,3 @@ export const requestAccountSummary = async (address: string) => {
     const apiUrl = getApiUrl()
     return axios.post(`${apiUrl}/api/account_summary`, { address })
 }
-
