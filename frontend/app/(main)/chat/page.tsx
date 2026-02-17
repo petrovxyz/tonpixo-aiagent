@@ -116,6 +116,8 @@ function ChatContent() {
     const activeAddressBootstrapKeyRef = useRef<string | null>(null)
     const addressBootstrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const addressBootstrapTimeoutOwnerRef = useRef<string | null>(null)
+    const pollStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const pollStatusOwnerJobIdRef = useRef<string | null>(null)
     const failedAutoBootstrapKeysRef = useRef<Set<string>>(new Set())
     const activeJobIdRef = useRef<string | null>(null) // Ref to track the currently active job for cleanup
 
@@ -158,6 +160,11 @@ function ChatContent() {
         setIsLoading(false)
         setJobId(null)
         activeJobIdRef.current = null
+        if (pollStatusTimeoutRef.current) {
+            clearTimeout(pollStatusTimeoutRef.current)
+            pollStatusTimeoutRef.current = null
+        }
+        pollStatusOwnerJobIdRef.current = null
         setMessages([])
         setStreamingContent("")
         streamingMsgIdRef.current = null
@@ -200,6 +207,11 @@ function ChatContent() {
                 addressBootstrapTimeoutRef.current = null
                 addressBootstrapTimeoutOwnerRef.current = null
             }
+            if (pollStatusTimeoutRef.current) {
+                clearTimeout(pollStatusTimeoutRef.current)
+                pollStatusTimeoutRef.current = null
+            }
+            pollStatusOwnerJobIdRef.current = null
             activeAddressBootstrapKeyRef.current = null
             // Cancel any in-progress job when leaving chat
             if (activeJobIdRef.current) {
@@ -422,15 +434,45 @@ function ChatContent() {
 
     // Existing Polling Logic
     const pollStatus = async (jobId: string, scanType: string, targetAddress: string) => {
+        const isCurrentJob = () => activeJobIdRef.current === jobId
+
+        if (!isCurrentJob()) {
+            return
+        }
+
         try {
             const apiUrl = getApiUrl()
             const response = await axios.get(`${apiUrl}/api/status/${jobId}`)
+            if (!isCurrentJob()) {
+                return
+            }
             const data = response.data
 
             if (data.status === "processing" || data.status === "queued") {
                 setCount(data.count || 0)
-                setTimeout(() => pollStatus(jobId, scanType, targetAddress), 1000)
+                if (isCurrentJob()) {
+                    if (
+                        pollStatusTimeoutRef.current &&
+                        pollStatusOwnerJobIdRef.current === jobId
+                    ) {
+                        clearTimeout(pollStatusTimeoutRef.current)
+                        pollStatusTimeoutRef.current = null
+                        pollStatusOwnerJobIdRef.current = null
+                    }
+                    pollStatusOwnerJobIdRef.current = jobId
+                    pollStatusTimeoutRef.current = setTimeout(() => {
+                        if (
+                            pollStatusOwnerJobIdRef.current === jobId &&
+                            activeJobIdRef.current === jobId
+                        ) {
+                            void pollStatus(jobId, scanType, targetAddress)
+                        }
+                    }, 1000)
+                }
             } else if (data.status === "success") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 setJobId(jobId)
 
@@ -454,12 +496,18 @@ function ChatContent() {
                             role: "user",
                             content: userMessage
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                         // 2. Save Agent Message (analysis complete)
                         await axios.post(`${apiUrl}/api/chat/${currentChatId}/message`, {
                             role: "agent",
                             content: agentMarkdown
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                         // Update chat with job_id (without re-initializing)
                         await axios.post(`${apiUrl}/api/chat/init`, {
@@ -468,12 +516,18 @@ function ChatContent() {
                             job_id: jobId,
                             address: targetAddress
                         })
+                        if (!isCurrentJob()) {
+                            return
+                        }
 
                     } catch (e) {
                         console.error("Failed to save messages:", e)
                     }
                 }
 
+                if (!isCurrentJob()) {
+                    return
+                }
 
                 addMessage("agent", (
                     <div className="flex flex-col gap-3">
@@ -490,26 +544,64 @@ function ChatContent() {
                 ), false, undefined, true)
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "empty") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 addMessage("agent", `I couldn't find any ${getScanTypeLabel(scanType)} for this address.`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "error") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 addMessage("agent", `Error: ${data.error || "Failed to generate history"}`, false, undefined, true)
                 activeJobIdRef.current = null  // Job completed, clear active job
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             } else if (data.status === "cancelled") {
+                if (!isCurrentJob()) {
+                    return
+                }
                 setIsLoading(false)
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job was cancelled
+                if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                    clearTimeout(pollStatusTimeoutRef.current)
+                    pollStatusTimeoutRef.current = null
+                }
+                pollStatusOwnerJobIdRef.current = null
             }
         } catch (err) {
+            if (!isCurrentJob()) {
+                return
+            }
             console.error("[SCAN] Connection to background service lost:", err)
             setIsLoading(false)
             removeLoadingMessage()
             addMessage("agent", "Connection to background service lost.", false, undefined, true)
+            activeJobIdRef.current = null
+            if (pollStatusTimeoutRef.current && pollStatusOwnerJobIdRef.current === jobId) {
+                clearTimeout(pollStatusTimeoutRef.current)
+                pollStatusTimeoutRef.current = null
+            }
+            pollStatusOwnerJobIdRef.current = null
         }
     }
 
@@ -533,6 +625,7 @@ function ChatContent() {
 
             if (response.data.job_id) {
                 activeJobIdRef.current = response.data.job_id  // Track active job for cleanup
+                pollStatusOwnerJobIdRef.current = response.data.job_id
                 pollStatus(response.data.job_id, scanType, targetAddress)
             }
         } catch (error) {

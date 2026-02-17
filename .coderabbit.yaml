@@ -1,4 +1,5 @@
 reviews:
-  base_branches:
-    - "main"
-    - "dev"
+  auto_review:
+    base_branches:
+      - "main"
+      - "dev"

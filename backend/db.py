@@ -216,36 +216,45 @@ def get_user_chats(user_id: int, limit: int = 20, last_key: Optional[dict] = Non
         
         if last_key:
             query_params['ExclusiveStartKey'] = last_key
-            
-        response = table.query(**query_params)
-        items = response.get('Items', [])
-        next_key = response.get('LastEvaluatedKey')
-        
-        # Debug: Log raw items before deduplication
-        raw_chat_ids = [(item.get('chat_id'), item.get('updated_at')) for item in items]
-        print(f"[DB] Raw query returned {len(items)} items for user {user_id}: {raw_chat_ids}")
-        
+
         # Deduplicate by chat_id, keeping the first occurrence (most recent updated_at)
-        # since results are sorted by updated_at descending
+        # since results are sorted by updated_at descending.
         seen_chat_ids = set()
         deduplicated_items = []
         duplicates_found = 0
-        for item in items:
-            chat_id = item.get('chat_id')
-            if chat_id and chat_id not in seen_chat_ids:
-                seen_chat_ids.add(chat_id)
-                deduplicated_items.append(item)
-                if len(deduplicated_items) >= limit:
-                    break
-            elif chat_id in seen_chat_ids:
-                duplicates_found += 1
-                print(f"[DB] Filtered duplicate chat_id: {chat_id}, updated_at: {item.get('updated_at')}")
+        next_key = last_key
+        page = 0
+
+        while True:
+            response = table.query(**query_params)
+            items = response.get('Items', [])
+            next_key = response.get('LastEvaluatedKey')
+            page += 1
+
+            # Debug: Log raw items before deduplication
+            raw_chat_ids = [(item.get('chat_id'), item.get('updated_at')) for item in items]
+            print(f"[DB] Raw query page {page} returned {len(items)} items for user {user_id}: {raw_chat_ids}")
+
+            for item in items:
+                chat_id = item.get('chat_id')
+                if chat_id and chat_id not in seen_chat_ids:
+                    seen_chat_ids.add(chat_id)
+                    deduplicated_items.append(item)
+                elif chat_id in seen_chat_ids:
+                    duplicates_found += 1
+                    print(f"[DB] Filtered duplicate chat_id: {chat_id}, updated_at: {item.get('updated_at')}")
+
+            if len(deduplicated_items) >= limit or not next_key:
+                break
+
+            query_params['ExclusiveStartKey'] = next_key
         
         if duplicates_found > 0:
             print(f"[DB] Removed {duplicates_found} duplicate chat entries")
         
-        print(f"[DB] Returning {len(deduplicated_items)} deduplicated items")
-        return deduplicated_items, next_key
+        result_items = deduplicated_items[:limit]
+        print(f"[DB] Returning {len(result_items)} deduplicated items")
+        return result_items, next_key
     except ClientError as e:
         print(f"Error fetching chats for user {user_id}: {e}")
         return [], None

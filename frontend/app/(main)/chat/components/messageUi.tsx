@@ -40,6 +40,7 @@ export const ActionButton = ({
 
     return (
         <button
+            type="button"
             aria-label={ariaLabel}
             onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect()
@@ -272,10 +273,16 @@ export const MessageBubble = ({
 
     const handleFeedback = (score: number) => {
         if (feedbackGiven !== null) return
-        setFeedbackGiven(score)
-        if (onFeedback) {
-            onFeedback(score, traceId || "")
+        if (!onFeedback) {
+            setFeedbackGiven(score)
+            return
         }
+        if (!traceId) {
+            onFeedback(score, "")
+            return
+        }
+        setFeedbackGiven(score)
+        onFeedback(score, traceId)
     }
 
     const getTextContent = (node: React.ReactNode): string => {
