@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion"
+import { motion, AnimatePresence, PanInfo } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faArrowUp } from "@fortawesome/free-solid-svg-icons"
 import { LazyImage } from "@/components/LazyImage"
@@ -22,17 +22,6 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
     const [isTransitioning, setIsTransitioning] = useState(false)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
 
-    // Auto-advance
-    useEffect(() => {
-        if (isDragging || isTransitioning) return
-
-        const timer = setInterval(() => {
-            nextSlide()
-        }, SLIDE_DURATION)
-
-        return () => clearInterval(timer)
-    }, [index, isDragging, isTransitioning])
-
     const nextSlide = useCallback(() => {
         if (isTransitioning) return
         setIsTransitioning(true)
@@ -49,13 +38,24 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
         setTimeout(() => setIsTransitioning(false), 1000) // Cooldown period
     }, [slides.length, isTransitioning])
 
+    // Auto-advance
+    useEffect(() => {
+        if (isDragging || isTransitioning) return
+
+        const timer = setInterval(() => {
+            nextSlide()
+        }, SLIDE_DURATION)
+
+        return () => clearInterval(timer)
+    }, [isDragging, isTransitioning, nextSlide])
+
     const handlePanStart = () => {
         // Don't allow dragging during transition
         if (isTransitioning) return
         setIsDragging(true)
     }
 
-    const handlePanEnd = (e: any, { offset, velocity }: PanInfo) => {
+    const handlePanEnd = (_event: MouseEvent | TouchEvent | PointerEvent, { offset, velocity }: PanInfo) => {
         // Don't process if we never started dragging (was blocked during transition)
         if (!isDragging) return
 
@@ -75,7 +75,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
     }
 
     const variants = {
-        enter: (direction: number) => ({
+        enter: () => ({
             opacity: 0,
             x: 0,
             zIndex: 1
@@ -88,7 +88,7 @@ export function ImageSlideshow({ slides, onSlideClick }: { slides: Slide[], onSl
                 opacity: { duration: 0.8, ease: "easeInOut" as const }
             }
         },
-        exit: (direction: number) => ({
+        exit: () => ({
             opacity: 0,
             x: 0,
             zIndex: 0,

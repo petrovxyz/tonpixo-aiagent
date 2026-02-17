@@ -21,7 +21,7 @@ export default function FavsPage() {
     const { user } = useTelegram()
     const { showToast } = useToast()
     const [favourites, setFavourites] = useState<Favourite[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const [isFetching, setIsFetching] = useState(false)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number; address?: string }[]>([])
     const rippleIdRef = useRef(0)
 
@@ -39,26 +39,19 @@ export default function FavsPage() {
         }
     }, [user])
 
-    useEffect(() => {
-        const loadFavourites = async () => {
-            if (!user?.id) {
-                if (user === null) {
-                    setIsLoading(false)
-                }
-                return
-            }
-
-            setIsLoading(true)
+    const loadFavourites = useCallback(async () => {
+        if (!user?.id) return
+        setIsFetching(true)
+        try {
             await fetchFavourites()
-            setIsLoading(false)
-        }
-
-        if (user) {
-            loadFavourites()
-        } else {
-            setIsLoading(false)
+        } finally {
+            setIsFetching(false)
         }
     }, [user, fetchFavourites])
+
+    useEffect(() => {
+        void loadFavourites()
+    }, [loadFavourites])
 
     const handleRemoveFavourite = async (address: string, e: React.MouseEvent) => {
         e.stopPropagation()
@@ -112,6 +105,10 @@ export default function FavsPage() {
         return `${address.slice(0, 6)}...${address.slice(-4)}`
     }
 
+    const hasUser = Boolean(user?.id)
+    const visibleFavourites = hasUser ? favourites : []
+    const isLoading = hasUser && isFetching
+
     return (
         <div className="relative w-full flex flex-col max-w-2xl mx-auto px-6 pb-6">
             {/* Header */}
@@ -126,7 +123,7 @@ export default function FavsPage() {
                 <div>
                     <h1 className="text-xl font-bold text-white">Favourites</h1>
                     <p className="text-white/60 text-xs">
-                        {favourites.length} address{favourites.length !== 1 ? 'es' : ''}
+                        {visibleFavourites.length} address{visibleFavourites.length !== 1 ? 'es' : ''}
                     </p>
                 </div>
             </motion.div>
@@ -146,7 +143,7 @@ export default function FavsPage() {
                         </div>
                         <span className="text-sm">Loading favourites...</span>
                     </div>
-                ) : favourites.length === 0 ? (
+                ) : visibleFavourites.length === 0 ? (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -166,7 +163,7 @@ export default function FavsPage() {
                     </motion.div>
                 ) : (
                     <div className="flex flex-col gap-2">
-                        {favourites.map((fav, index) => (
+                        {visibleFavourites.map((fav, index) => (
                             <motion.div
                                 key={fav.address}
                                 initial={{ opacity: 0, y: 10 }}

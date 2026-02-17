@@ -26,9 +26,16 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
 
     // Handle mounting for Portal and global state
     useEffect(() => {
-        setMounted(true)
-        setIsOverlayOpen(true)
-        return () => setIsOverlayOpen(false)
+        const mountRaf = window.requestAnimationFrame(() => {
+            setMounted(true)
+            setIsOverlayOpen(true)
+        })
+        return () => {
+            window.cancelAnimationFrame(mountRaf)
+            window.requestAnimationFrame(() => {
+                setIsOverlayOpen(false)
+            })
+        }
     }, [setIsOverlayOpen])
 
     // Drag end handler to close if dragged down sufficiently

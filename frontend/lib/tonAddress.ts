@@ -129,7 +129,7 @@ export async function validateTonAddress(input: string): Promise<AddressValidati
                 rawAddress: address.toRawString(),
                 isDomain: false
             }
-        } catch (err) {
+        } catch {
             return { isValid: false, error: "Invalid raw address format", isDomain: false }
         }
     }

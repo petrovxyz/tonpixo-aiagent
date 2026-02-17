@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, createContext, useContext } from 'react'
+import React, { useState, useRef, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheckCircle, faExclamationCircle, faInfoCircle, faTimes } from '@fortawesome/free-solid-svg-icons'
@@ -30,9 +30,10 @@ export const useToast = () => {
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     const [toasts, setToasts] = useState<Toast[]>([])
+    const toastIdRef = useRef(0)
 
     const showToast = (message: string, type: ToastType = 'success') => {
-        const id = Math.random().toString(36).substr(2, 9)
+        const id = `toast-${toastIdRef.current++}`
         setToasts((prev) => [...prev, { id, message, type }])
 
         // Auto remove after 3 seconds

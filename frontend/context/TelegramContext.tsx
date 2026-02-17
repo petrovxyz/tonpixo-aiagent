@@ -11,8 +11,8 @@ declare global {
             WebApp?: {
                 initData: string;
                 initDataUnsafe: {
-                    user?: any;
-                    [key: string]: any;
+                    user?: TelegramInitDataUnsafeUser;
+                    [key: string]: unknown;
                 };
                 ready: () => void;
                 expand: () => void;
@@ -23,6 +23,33 @@ declare global {
             };
         };
     }
+}
+
+interface TelegramInitDataUnsafeUser {
+    id: number
+    first_name: string
+    last_name?: string
+    username?: string
+    language_code?: string
+    photo_url?: string
+}
+
+interface LaunchParamsUser {
+    id: number
+    firstName: string
+    lastName?: string
+    username?: string
+    languageCode?: string
+    photoUrl?: string
+}
+
+interface LaunchParamsInitData {
+    user?: LaunchParamsUser
+}
+
+interface LaunchParamsResult {
+    initDataRaw?: string
+    initData?: LaunchParamsInitData
 }
 
 interface TelegramUser {
@@ -76,7 +103,9 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(true)
             try {
                 console.log("[TG] Initializing Telegram context...")
-                const { initDataRaw, initData } = retrieveLaunchParams() as any
+                const launchParams = retrieveLaunchParams() as unknown as LaunchParamsResult
+                const initDataRaw = launchParams.initDataRaw
+                const initData = launchParams.initData
 
                 // UI Configuration - Always run this if Telegram WebApp is available
                 if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
@@ -180,20 +209,29 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                                 console.error("[TG] Login failed:", response.data.message)
                                 setError(`Login failed: ${response.data.message}`)
                             }
-                        } catch (loginError: any) {
+                        } catch (loginError) {
                             console.error("[TG] Login request failed:", loginError)
 
-                            if (loginError.code === 'ECONNABORTED') {
-                                setError("Connection timeout. Please check your network connection.")
-                            } else if (loginError.response) {
-                                // Server responded with error
-                                setError(`Server error: ${loginError.response.status} - ${loginError.response.data?.message || loginError.message}`)
-                            } else if (loginError.request) {
-                                // Request made but no response
-                                setError("No response from server. Please check if the backend is running.")
-                            } else {
-                                // Other errors
+                            if (axios.isAxiosError(loginError)) {
+                                if (loginError.code === 'ECONNABORTED') {
+                                    setError("Connection timeout. Please check your network connection.")
+                                } else if (loginError.response) {
+                                    const responseData = loginError.response.data
+                                    const responseMessage = typeof responseData === "object" && responseData && "message" in responseData
+                                        ? String((responseData as { message?: unknown }).message)
+                                        : loginError.message
+                                    setError(`Server error: ${loginError.response.status} - ${responseMessage}`)
+                                } else if (loginError.request) {
+                                    // Request made but no response
+                                    setError("No response from server. Please check if the backend is running.")
+                                } else {
+                                    // Other errors
+                                    setError(`Connection failed: ${loginError.message}`)
+                                }
+                            } else if (loginError instanceof Error) {
                                 setError(`Connection failed: ${loginError.message}`)
+                            } else {
+                                setError("Connection failed: Unknown error")
                             }
                         }
                     }
@@ -217,7 +255,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                         setError("Could not retrieve user data from Telegram.")
                     }
                 }
-            } catch (error: any) {
+            } catch (error) {
                 console.error("[TG] Initialization error:", error)
 
                 if (process.env.NODE_ENV === "development") {

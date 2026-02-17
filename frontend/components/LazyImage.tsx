@@ -26,13 +26,14 @@ export function LazyImage({
     onLoad,
     loading,
     minShimmerMs = 220,
+    alt = "",
     ...props
 }: LazyImageProps) {
     const srcKey = getSrcKey(props.src)
     const alreadyCached = srcKey ? loadedSrcs.has(srcKey) : false
 
     const [loaded, setLoaded] = useState(alreadyCached)
-    const mountTimeRef = useRef<number>(Date.now())
+    const mountTimeRef = useRef<number | null>(null)
     const timeoutRef = useRef<number | null>(null)
     const isFill = Boolean(props.fill)
 
@@ -54,12 +55,13 @@ export function LazyImage({
     }
 
     useEffect(() => {
+        mountTimeRef.current = Date.now()
         return () => {
             if (timeoutRef.current) {
                 window.clearTimeout(timeoutRef.current)
             }
         }
-    }, [])
+    }, [srcKey])
 
     return (
         <span
@@ -70,6 +72,7 @@ export function LazyImage({
         >
             <Image
                 {...props}
+                alt={alt}
                 loading={resolvedLoading}
                 className={cn("image-element", className)}
                 onLoad={(e) => {
@@ -77,6 +80,9 @@ export function LazyImage({
                     if (img.naturalWidth === 0) return
                     if (srcKey) loadedSrcs.add(srcKey)
                     if (alreadyCached) return
+                    if (mountTimeRef.current === null) {
+                        mountTimeRef.current = Date.now()
+                    }
                     const elapsed = Date.now() - mountTimeRef.current
                     const delay = Math.max(0, minShimmerMs - elapsed)
                     timeoutRef.current = window.setTimeout(() => {

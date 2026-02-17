@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
 import { getAssetUrl } from "@/lib/assetsUrl"
@@ -14,23 +14,29 @@ const GAP = 12
 export function PrivacyConsentBanner() {
     const { isInitialLoading } = useUI()
     const pathname = usePathname()
-    const [mounted, setMounted] = useState(false)
-    const [acknowledged, setAcknowledged] = useState<boolean | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [bottomOffset, setBottomOffset] = useState(BASE_OFFSET)
 
-    useEffect(() => {
-        setMounted(true)
-    }, [])
+    const acknowledged = useSyncExternalStore(
+        (callback) => {
+            if (typeof window === "undefined") return () => {}
+            const handler = () => callback()
+            window.addEventListener("storage", handler)
+            window.addEventListener("tonpixo:privacy-ack", handler)
+            return () => {
+                window.removeEventListener("storage", handler)
+                window.removeEventListener("tonpixo:privacy-ack", handler)
+            }
+        },
+        () => {
+            if (typeof window === "undefined") return false
+            return localStorage.getItem(STORAGE_KEY) === "1"
+        },
+        () => false
+    )
 
     useEffect(() => {
-        if (!mounted) return
-        const stored = localStorage.getItem(STORAGE_KEY)
-        setAcknowledged(stored === "1")
-    }, [mounted])
-
-    useEffect(() => {
-        if (!mounted) return
+        if (typeof window === "undefined") return
 
         const computeOffset = () => {
             let offset = BASE_OFFSET
@@ -58,11 +64,12 @@ export function PrivacyConsentBanner() {
             observer?.disconnect()
             window.removeEventListener("resize", computeOffset)
         }
-    }, [mounted, pathname])
+    }, [pathname])
 
     const handleAgree = () => {
+        if (typeof window === "undefined") return
         localStorage.setItem(STORAGE_KEY, "1")
-        setAcknowledged(true)
+        window.dispatchEvent(new Event("tonpixo:privacy-ack"))
     }
 
     const privacyItem: QAItem = {
@@ -73,9 +80,9 @@ export function PrivacyConsentBanner() {
         image: getAssetUrl("images/banner_data_privacy.webp"),
     }
 
-    const shouldShow = acknowledged === false
+    const shouldShow = !acknowledged
 
-    if (!mounted || isInitialLoading) return null
+    if (typeof window === "undefined" || isInitialLoading) return null
 
     return (
         <>

@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useUI } from "@/context/UIContext"
 import { useTelegram } from "@/context/TelegramContext"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
@@ -10,31 +10,38 @@ import { getAssetUrl } from "@/lib/assetsUrl"
 import Image from "next/image"
 
 export default function Preloader() {
-    const { isInitialLoading, setIsInitialLoading } = useUI()
+    const { setIsInitialLoading } = useUI()
     const { isLoading: isTelegramLoading, error: telegramError } = useTelegram()
-    const [isVisible, setIsVisible] = useState(true)
+    const [isDismissed, setIsDismissed] = useState(false)
+    const dismissTimerRef = useRef<number | null>(null)
+    const exitTimerRef = useRef<number | null>(null)
 
     useEffect(() => {
-        // If there is a telegram error, keep the preloader visible to show the error
-        if (telegramError) {
-            setIsVisible(true)
-            return
-        }
-
         // Wait for telegram loading to finish before starting the timer
-        if (isTelegramLoading) return
+        if (telegramError || isTelegramLoading || dismissTimerRef.current !== null) return
 
         // Ensure the preloader shows for at least a short duration for the "premium" feel
-        const timer = setTimeout(() => {
-            setIsVisible(false)
+        dismissTimerRef.current = window.setTimeout(() => {
+            setIsDismissed(true)
             // Wait a bit for the exit animation to start before showing the main content
-            setTimeout(() => {
+            exitTimerRef.current = window.setTimeout(() => {
                 setIsInitialLoading(false)
             }, 300)
         }, 2200)
 
-        return () => clearTimeout(timer)
+        return () => {
+            if (dismissTimerRef.current !== null) {
+                window.clearTimeout(dismissTimerRef.current)
+                dismissTimerRef.current = null
+            }
+            if (exitTimerRef.current !== null) {
+                window.clearTimeout(exitTimerRef.current)
+                exitTimerRef.current = null
+            }
+        }
     }, [setIsInitialLoading, isTelegramLoading, telegramError])
+
+    const isVisible = telegramError || !isDismissed
 
     return (
         <AnimatePresence>
