@@ -232,27 +232,36 @@ const parseStoredMessage = (content: string): { content: React.ReactNode; isSyst
 }
 
 const getApiErrorMessage = (error: unknown, fallback: string): string => {
+    const sanitizeMessage = (value: unknown): string | null => {
+        if (typeof value !== "string") return null
+        const stripped = value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+        if (!stripped) return null
+        const maxLength = 200
+        if (stripped.length > maxLength) {
+            return `${stripped.slice(0, maxLength - 3).trimEnd()}...`
+        }
+        return stripped
+    }
+
     if (axios.isAxiosError(error)) {
         const data = error.response?.data
-        if (typeof data === "string" && data.trim()) {
-            return data
-        }
+        const dataMessage = sanitizeMessage(data)
+        if (dataMessage) return dataMessage
         if (data && typeof data === "object") {
             const record = data as Record<string, unknown>
-            if (typeof record.error === "string" && record.error.trim()) {
-                return record.error
-            }
-            if (typeof record.detail === "string" && record.detail.trim()) {
-                return record.detail
-            }
-            if (typeof record.message === "string" && record.message.trim()) {
-                return record.message
-            }
+            const errorMessage = sanitizeMessage(record.error)
+            if (errorMessage) return errorMessage
+            const detailMessage = sanitizeMessage(record.detail)
+            if (detailMessage) return detailMessage
+            const recordMessage = sanitizeMessage(record.message)
+            if (recordMessage) return recordMessage
         }
-        if (error.message) return error.message
+        const fallbackMessage = sanitizeMessage(error.message)
+        if (fallbackMessage) return fallbackMessage
         return fallback
     }
-    if (error instanceof Error && error.message) return error.message
+    const genericMessage = error instanceof Error ? sanitizeMessage(error.message) : null
+    if (genericMessage) return genericMessage
     return fallback
 }
 
@@ -931,7 +940,8 @@ function ChatContent() {
                 removeLoadingMessage()
                 activeJobIdRef.current = null  // Job was cancelled
             }
-        } catch {
+        } catch (err) {
+            console.error("[SCAN] Connection to background service lost:", err)
             setIsLoading(false)
             removeLoadingMessage()
             addMessage("agent", "Connection to background service lost.", false, undefined, true)
@@ -1120,7 +1130,8 @@ function ChatContent() {
                     }
                 }
             }
-        } catch {
+        } catch (err) {
+            console.error("[ACCOUNT] Failed to fetch account summary:", err)
             // Remove loading message
             setMessages(prev => prev.filter(m => m.id !== loadingId))
             // Fallback (same as error above)
@@ -1381,7 +1392,8 @@ function ChatContent() {
                             console.log("[STREAM] Detected Lambda proxy response (fallback), extracting body")
                             text = proxyResponse.body
                         }
-                    } catch {
+                    } catch (err) {
+                        console.error("[STREAM] Failed to parse proxy response:", err)
                         // Not a complete JSON, might be partial - continue with raw text
                     }
                 }
@@ -1511,7 +1523,8 @@ function ChatContent() {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 const responseData = response.data
                 addMessage("agent", responseData.answer || "I couldn't get an answer.", false, responseData.trace_id)
-            } catch {
+            } catch (err) {
+                console.error("[STREAM] Fallback request failed:", err)
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 addMessage("agent", "I encountered an error talking to the agent.")
             }

@@ -18,15 +18,11 @@ export default function Preloader() {
 
     useEffect(() => {
         // Wait for telegram loading to finish before starting the timer
-        if (telegramError || isTelegramLoading || dismissTimerRef.current !== null) return
+        if (telegramError || isTelegramLoading || isDismissed || dismissTimerRef.current !== null) return
 
         // Ensure the preloader shows for at least a short duration for the "premium" feel
         dismissTimerRef.current = window.setTimeout(() => {
             setIsDismissed(true)
-            // Wait a bit for the exit animation to start before showing the main content
-            exitTimerRef.current = window.setTimeout(() => {
-                setIsInitialLoading(false)
-            }, 300)
         }, 2200)
 
         return () => {
@@ -34,12 +30,24 @@ export default function Preloader() {
                 window.clearTimeout(dismissTimerRef.current)
                 dismissTimerRef.current = null
             }
+        }
+    }, [isTelegramLoading, telegramError, isDismissed])
+
+    useEffect(() => {
+        if (!isDismissed || exitTimerRef.current !== null) return
+
+        // Wait a bit for the exit animation to start before showing the main content
+        exitTimerRef.current = window.setTimeout(() => {
+            setIsInitialLoading(false)
+        }, 300)
+
+        return () => {
             if (exitTimerRef.current !== null) {
                 window.clearTimeout(exitTimerRef.current)
                 exitTimerRef.current = null
             }
         }
-    }, [setIsInitialLoading, isTelegramLoading, telegramError])
+    }, [isDismissed, setIsInitialLoading])
 
     const isVisible = telegramError || !isDismissed
 
