@@ -7,7 +7,7 @@ import { QABottomSheet, QAItem } from "@/components/QABottomSheet"
 import { ImageSlideshow } from "@/components/ImageSlideshow"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faMagnifyingGlass, faArrowUp, faSpinner, faExclamationCircle } from "@fortawesome/free-solid-svg-icons"
-import { validateTonAddress, isTonDomain } from "@/lib/tonAddress"
+import { validateTonAddress } from "@/lib/tonAddress"
 import { getAssetUrl } from "@/lib/assetsUrl"
 
 // --- Data ---
@@ -103,9 +103,6 @@ export default function Home() {
       startSearch(address)
     }
   }, [address, isValidating, startSearch])
-
-  // Show hint about domain resolution
-  const showDomainHint = isTonDomain(address.trim()) && !validationError && !isValidating
 
   return (
     <div className="relative w-full flex flex-col px-6 max-w-2xl mx-auto flex-1 justify-center">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCheckCircle, faSpinner, faArrowLeft, faGear, faExternalLinkAlt, faClockRotateLeft, faWallet, faObjectGroup, faThumbsUp, faThumbsDown, faCopy, faBookmark as faBookmarkSolid, faQuestion } from "@fortawesome/free-solid-svg-icons"
@@ -169,9 +170,13 @@ interface AddressDetailsData {
     hasError?: boolean
 }
 
+const StaticTextWrapper = ({ children }: { children: React.ReactNode; isAgent: boolean; isStreaming?: boolean }) => (
+    <>{children}</>
+)
+
 // Component to render address details message (works for both live and loaded from history)
 const AddressDetailsMessage = ({ data, animate = false }: { data: AddressDetailsData; animate?: boolean }) => {
-    const TextWrapper = animate ? AnimatedText : ({ children }: { children: React.ReactNode }) => <>{children}</>
+    const TextWrapper = animate ? AnimatedText : StaticTextWrapper
 
     return (
         <div className="flex flex-col gap-4">
@@ -192,7 +197,7 @@ const AddressDetailsMessage = ({ data, animate = false }: { data: AddressDetails
 
             <p className="text-white">
                 <TextWrapper isAgent={true}>
-                    Got it! I've received the address. You can explore it by yourself on:
+                    Got it! I&apos;ve received the address. You can explore it by yourself on:
                 </TextWrapper>
             </p>
             <ExplorerLink
@@ -224,6 +229,40 @@ const parseStoredMessage = (content: string): { content: React.ReactNode; isSyst
         // Not JSON, return as-is (will be rendered as markdown)
     }
     return { content, isSystemMessage: false }
+}
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+    const sanitizeMessage = (value: unknown): string | null => {
+        if (typeof value !== "string") return null
+        const stripped = value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+        if (!stripped) return null
+        const maxLength = 200
+        if (stripped.length > maxLength) {
+            return `${stripped.slice(0, maxLength - 3).trimEnd()}...`
+        }
+        return stripped
+    }
+
+    if (axios.isAxiosError(error)) {
+        const data = error.response?.data
+        const dataMessage = sanitizeMessage(data)
+        if (dataMessage) return dataMessage
+        if (data && typeof data === "object") {
+            const record = data as Record<string, unknown>
+            const errorMessage = sanitizeMessage(record.error)
+            if (errorMessage) return errorMessage
+            const detailMessage = sanitizeMessage(record.detail)
+            if (detailMessage) return detailMessage
+            const recordMessage = sanitizeMessage(record.message)
+            if (recordMessage) return recordMessage
+        }
+        const fallbackMessage = sanitizeMessage(error.message)
+        if (fallbackMessage) return fallbackMessage
+        return fallback
+    }
+    const genericMessage = error instanceof Error ? sanitizeMessage(error.message) : null
+    if (genericMessage) return genericMessage
+    return fallback
 }
 
 // Streaming message component that shows tokens as they arrive
@@ -317,12 +356,15 @@ const MessageBubble = ({
         >
             {role === "agent" && (
                 <div className="w-10 h-10 rounded-full bg-white/20 border border-white/30 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-lg">
-                    <LazyImage
+                    <Image
                         src={getAssetUrl("logo.svg")}
                         alt="Agent"
-                        width={24}
-                        height={24}
+                        width={28}
+                        height={28}
+                        style={{ width: "28px", height: "28px" }}
                         className="object-contain"
+                        loading="lazy"
+                        unoptimized
                     />
                 </div>
             )}
@@ -461,7 +503,6 @@ function ChatContent() {
     const [jobId, setJobId] = useState<string | null>(null)
     const [chatId, setChatId] = useState<string | null>(null)
     const [streamingContent, setStreamingContent] = useState("")
-    const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [pendingAddress, setPendingAddress] = useState<string | null>(null)
     const [currentScanType, setCurrentScanType] = useState<string | null>(null)
     const [isFavourite, setIsFavourite] = useState(false)
@@ -728,7 +769,7 @@ function ChatContent() {
             } catch (error) {
                 console.error("Failed to load history:", error)
                 historyLoadedRef.current = null // Reset so it can retry
-                const errorMsg = (error as any).response?.data?.error || (error as any).response?.data?.detail || (error as any).message || "Unknown error"
+                const errorMsg = getApiErrorMessage(error, "Unknown error")
 
                 if (errorMsg.includes("Access denied")) {
                     showToast("Access denied: you cannot view this chat", "error")
@@ -743,10 +784,10 @@ function ChatContent() {
         }
 
         loadHistory()
-    }, [chatIdParam, user])
+    }, [chatIdParam, user, addressParam, router, showToast])
 
     // Generate Chat ID if needed when starting interaction
-    const ensureChatId = () => {
+    const ensureChatId = useCallback(() => {
         // Use ref to get the latest value, avoiding stale closures
         if (chatIdRef.current) {
             console.log(`[CHAT-ID] Returning existing chatId: ${chatIdRef.current}`)
@@ -777,7 +818,7 @@ function ChatContent() {
         newUrl.searchParams.set('chat_id', newId)
         window.history.pushState({}, '', newUrl.toString())
         return newId
-    }
+    }, [setChatId])
 
     // Get scan type label for messages
     const getScanTypeLabel = (scanType: string) => {
@@ -877,7 +918,7 @@ function ChatContent() {
                         </div>
                         <p className="text-white/90">
                             <AnimatedText isAgent={true}>
-                                I'm done! {data.count} {getScanTypeLabel(scanType)} have been scanned and I'm ready for your questions.
+                                I&apos;m done! {data.count} {getScanTypeLabel(scanType)} have been scanned and I&apos;m ready for your questions.
                             </AnimatedText>
                         </p>
                     </div>
@@ -900,6 +941,7 @@ function ChatContent() {
                 activeJobIdRef.current = null  // Job was cancelled
             }
         } catch (err) {
+            console.error("[SCAN] Connection to background service lost:", err)
             setIsLoading(false)
             removeLoadingMessage()
             addMessage("agent", "Connection to background service lost.", false, undefined, true)
@@ -928,9 +970,10 @@ function ChatContent() {
                 activeJobIdRef.current = response.data.job_id  // Track active job for cleanup
                 pollStatus(response.data.job_id, scanType, targetAddress)
             }
-        } catch (err) {
+        } catch (error) {
             removeLoadingMessage()
-            addMessage("agent", (err as any).response?.data?.detail || "Failed to start generation.", false, undefined, true)
+            const errorMsg = getApiErrorMessage(error, "Failed to start generation.")
+            addMessage("agent", errorMsg, false, undefined, true)
             setIsLoading(false)
         }
     }
@@ -1087,7 +1130,8 @@ function ChatContent() {
                     }
                 }
             }
-        } catch (_) {
+        } catch (err) {
+            console.error("[ACCOUNT] Failed to fetch account summary:", err)
             // Remove loading message
             setMessages(prev => prev.filter(m => m.id !== loadingId))
             // Fallback (same as error above)
@@ -1272,7 +1316,6 @@ function ChatContent() {
 
         setIsLoading(true)
         setStreamingContent("")
-        setIsAnalyzing(false)
 
         // Add a streaming message placeholder with thinking state
         const streamingMsgId = "streaming-" + Date.now()
@@ -1349,7 +1392,8 @@ function ChatContent() {
                             console.log("[STREAM] Detected Lambda proxy response (fallback), extracting body")
                             text = proxyResponse.body
                         }
-                    } catch {
+                    } catch (err) {
+                        console.error("[STREAM] Failed to parse proxy response:", err)
                         // Not a complete JSON, might be partial - continue with raw text
                     }
                 }
@@ -1389,7 +1433,6 @@ function ChatContent() {
                                 ))
                             } else if (data.type === "tool_start") {
                                 currentlyAnalyzing = true
-                                setIsAnalyzing(true)
                                 // Update message to show analyzing state
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
@@ -1398,7 +1441,6 @@ function ChatContent() {
                                 ))
                             } else if (data.type === "tool_end") {
                                 currentlyAnalyzing = false
-                                setIsAnalyzing(false)
                                 // Update message to hide analyzing state
                                 setMessages(prev => prev.map(m =>
                                     m.id === streamingMsgId
@@ -1481,7 +1523,8 @@ function ChatContent() {
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 const responseData = response.data
                 addMessage("agent", responseData.answer || "I couldn't get an answer.", false, responseData.trace_id)
-            } catch (_) {
+            } catch (err) {
+                console.error("[STREAM] Fallback request failed:", err)
                 setMessages(prev => prev.filter(m => m.id !== streamingMsgId))
                 addMessage("agent", "I encountered an error talking to the agent.")
             }
@@ -1489,9 +1532,8 @@ function ChatContent() {
         } finally {
             setIsLoading(false)
             setStreamingContent("")
-            setIsAnalyzing(false)
         }
-    }, [jobId])
+    }, [jobId, user?.id, ensureChatId])
 
     const handleSend = async () => {
         if (!inputValue.trim()) return

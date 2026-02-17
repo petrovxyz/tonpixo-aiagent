@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faMessage, faSpinner, faChevronRight, faClock, faWallet } from "@fortawesome/free-solid-svg-icons"
+import { faMessage, faSpinner, faChevronRight, faClock } from "@fortawesome/free-solid-svg-icons"
 import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 import { getApiUrl } from "@/lib/backendUrl"
@@ -22,11 +22,12 @@ export default function HistoryPage() {
     const router = useRouter()
     const { user } = useTelegram()
     const [chats, setChats] = useState<ChatSession[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const [isFetching, setIsFetching] = useState(false)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [nextKey, setNextKey] = useState<string | null>(null)
     const [totalCount, setTotalCount] = useState<number | null>(null)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number; chatId?: string }[]>([])
+    const rippleIdRef = useRef(0)
 
     const fetchHistory = useCallback(async (lastKey?: string | null) => {
         if (!user?.id) return
@@ -73,26 +74,19 @@ export default function HistoryPage() {
         }
     }, [user])
 
-    useEffect(() => {
-        const loadInitial = async () => {
-            if (!user?.id) {
-                if (user === null) {
-                    setIsLoading(false)
-                }
-                return
-            }
-
-            setIsLoading(true)
+    const loadInitial = useCallback(async () => {
+        if (!user?.id) return
+        setIsFetching(true)
+        try {
             await fetchHistory()
-            setIsLoading(false)
-        }
-
-        if (user) {
-            loadInitial()
-        } else {
-            setIsLoading(false)
+        } finally {
+            setIsFetching(false)
         }
     }, [user, fetchHistory])
+
+    useEffect(() => {
+        void loadInitial()
+    }, [loadInitial])
 
     const loadMore = async () => {
         if (!nextKey || isLoadingMore) return
@@ -100,6 +94,9 @@ export default function HistoryPage() {
         await fetchHistory(nextKey)
         setIsLoadingMore(false)
     }
+
+    const hasUser = Boolean(user?.id)
+    const isLoading = user === undefined || (hasUser && isFetching)
 
     const formatDate = (dateString: string) => {
         // Backend sends UTC timestamps without 'Z' suffix, so we need to add it
@@ -127,7 +124,7 @@ export default function HistoryPage() {
         const y = e.clientY - rect.top
         const size = Math.max(rect.width, rect.height)
 
-        const ripple = { id: Date.now(), x, y, size, chatId }
+        const ripple = { id: rippleIdRef.current++, x, y, size, chatId }
         setRipples(prev => [...prev, ripple])
     }
 

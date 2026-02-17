@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 
-import { UIProvider, useUI } from "@/context/UIContext"
+import { useUI } from "@/context/UIContext"
 
 const ROUTES = ["/explore", "/history", "/favs", "/settings", "/chat"]
 

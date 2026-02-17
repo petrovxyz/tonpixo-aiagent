@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
     BarChart,
@@ -19,15 +19,15 @@ import {
     Legend,
     ResponsiveContainer,
 } from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExpand, faTimes, faChartSimple } from '@fortawesome/free-solid-svg-icons';
-import { cn } from '@/lib/utils';
+
+type ChartDatum = Record<string, number | string | null>;
 
 interface ChartData {
     title?: string;
     type: 'bar' | 'line' | 'area' | 'pie';
-    data: any[];
+    data: ChartDatum[];
     xAxisKey: string;
     dataKeys: string[];
 }
@@ -41,11 +41,7 @@ const COLORS = ['#0088fe', '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f'
 export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
     const { title, type, data, xAxisKey, dataKeys } = config;
     const [isOpen, setIsOpen] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    const canUseDOM = typeof window !== "undefined";
 
     const renderChart = (inModal: boolean = false) => {
         const fontSize = inModal ? 12 : 10;
@@ -196,7 +192,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
             </div>
 
             {/* Full Screen Modal */}
-            {isOpen && isMounted && createPortal(
+            {isOpen && canUseDOM && createPortal(
                 <div
                     className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                     onClick={(e) => {
@@ -238,4 +234,3 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
         </>
     );
 };
-
