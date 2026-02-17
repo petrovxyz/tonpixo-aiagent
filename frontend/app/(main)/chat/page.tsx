@@ -245,6 +245,9 @@ const getApiErrorMessage = (error: unknown, fallback: string): string => {
             if (typeof record.detail === "string" && record.detail.trim()) {
                 return record.detail
             }
+            if (typeof record.message === "string" && record.message.trim()) {
+                return record.message
+            }
         }
         if (error.message) return error.message
         return fallback
@@ -347,9 +350,9 @@ const MessageBubble = ({
                     <Image
                         src={getAssetUrl("logo.svg")}
                         alt="Agent"
-                        width={18}
-                        height={18}
-                        style={{ width: "auto", height: "auto" }}
+                        width={28}
+                        height={28}
+                        style={{ width: "28px", height: "28px" }}
                         className="object-contain"
                         loading="lazy"
                         unoptimized
