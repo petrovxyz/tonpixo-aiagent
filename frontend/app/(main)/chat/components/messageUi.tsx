@@ -25,6 +25,7 @@ interface ActionButtonProps {
     icon?: React.ReactNode
     variant?: ActionButtonVariant
     className?: string
+    ariaLabel?: string
 }
 
 export const ActionButton = ({
@@ -32,12 +33,14 @@ export const ActionButton = ({
     onClick,
     icon,
     variant = "primary",
-    className
+    className,
+    ariaLabel
 }: ActionButtonProps) => {
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
 
     return (
         <button
+            aria-label={ariaLabel}
             onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect()
                 const x = e.clientX - rect.left
@@ -405,6 +408,7 @@ export const MessageBubble = ({
                                             variant="icon_agent"
                                             onClick={() => handleFeedback(1)}
                                             className={cn(feedbackGiven === 1 && "bg-white/30 border border-white/50")}
+                                            ariaLabel="Rate response as helpful"
                                         >
                                             <FontAwesomeIcon icon={faThumbsUp} />
                                         </ActionButton>
@@ -412,6 +416,7 @@ export const MessageBubble = ({
                                             variant="icon_agent"
                                             onClick={() => handleFeedback(0)}
                                             className={cn(feedbackGiven === 0 && "bg-white/30 border border-white/50")}
+                                            ariaLabel="Rate response as not helpful"
                                         >
                                             <FontAwesomeIcon icon={faThumbsDown} />
                                         </ActionButton>
@@ -419,6 +424,7 @@ export const MessageBubble = ({
                                 )}
                                 <ActionButton
                                     variant={role === "user" ? "icon_user" : "icon_agent"}
+                                    ariaLabel="Copy message"
                                     onClick={() => {
                                         const extractedText = getTextContent(content)
                                         onCopy?.(extractedText || getCopyTextFallback(content))

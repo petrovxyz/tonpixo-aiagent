@@ -115,6 +115,7 @@ function ChatContent() {
     const activeHistoryRequestIdRef = useRef(0)
     const activeAddressBootstrapKeyRef = useRef<string | null>(null)
     const addressBootstrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const addressBootstrapTimeoutOwnerRef = useRef<string | null>(null)
     const failedAutoBootstrapKeysRef = useRef<Set<string>>(new Set())
     const activeJobIdRef = useRef<string | null>(null) // Ref to track the currently active job for cleanup
 
@@ -150,6 +151,11 @@ function ChatContent() {
 
         chatIdRef.current = chatIdParam
         activeSessionRef.current = false
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+            abortControllerRef.current = null
+        }
+        setIsLoading(false)
         setJobId(null)
         activeJobIdRef.current = null
         setMessages([])
@@ -164,6 +170,7 @@ function ChatContent() {
         if (addressBootstrapTimeoutRef.current) {
             clearTimeout(addressBootstrapTimeoutRef.current)
             addressBootstrapTimeoutRef.current = null
+            addressBootstrapTimeoutOwnerRef.current = null
         }
         failedAutoBootstrapKeysRef.current.clear()
     }, [chatIdParam])
@@ -186,10 +193,12 @@ function ChatContent() {
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort()
+                abortControllerRef.current = null
             }
             if (addressBootstrapTimeoutRef.current) {
                 clearTimeout(addressBootstrapTimeoutRef.current)
                 addressBootstrapTimeoutRef.current = null
+                addressBootstrapTimeoutOwnerRef.current = null
             }
             activeAddressBootstrapKeyRef.current = null
             // Cancel any in-progress job when leaving chat
@@ -585,6 +594,7 @@ function ChatContent() {
         const searchPrompt = `Search: ${address}`
         const persistSearchMessage = options.persistSearchMessage ?? true
         const source = options.source ?? "manual"
+        const isActiveBootstrap = () => activeAddressBootstrapKeyRef.current === bootstrapKey
 
         if (source === "manual") {
             failedAutoBootstrapKeysRef.current.delete(bootstrapKey)
@@ -625,6 +635,7 @@ function ChatContent() {
                         title: `Address: ${address.slice(0, 8)}...${address.slice(-6)}`,
                         address
                     })
+                    if (!isActiveBootstrap()) return
 
                     if (persistSearchMessage) {
                         await saveChatMessage(currentChatId, {
@@ -632,17 +643,21 @@ function ChatContent() {
                             content: searchPrompt,
                             idempotency_key: `bootstrap:user:${bootstrapKey}`
                         })
+                        if (!isActiveBootstrap()) return
                     }
                 } catch (saveError) {
                     console.error("Failed to initialize chat before summary fetch:", saveError)
                 }
             }
 
+            if (!isActiveBootstrap()) return
+
             const response = await retryWithBackoff(
                 () => requestAccountSummary(address),
                 3,
                 400
             )
+            if (!isActiveBootstrap()) return
             setMessages(prev => prev.filter(m => m.metaKey !== loadingMetaKey))
 
             let addressDetailsJson: AddressDetailsData
@@ -666,12 +681,15 @@ function ChatContent() {
                         content: JSON.stringify(addressDetailsJson),
                         idempotency_key: `bootstrap:agent:${bootstrapKey}`
                     })
+                    if (!isActiveBootstrap()) return
                 } catch (saveError) {
                     console.error("Failed to save address details to history:", saveError)
                 }
             }
+            if (!isActiveBootstrap()) return
             failedAutoBootstrapKeysRef.current.delete(bootstrapKey)
         } catch (err) {
+            if (!isActiveBootstrap()) return
             console.error("[ACCOUNT] Failed to fetch account summary:", err)
             if (source === "auto") {
                 failedAutoBootstrapKeysRef.current.add(bootstrapKey)
@@ -684,17 +702,30 @@ function ChatContent() {
                 />
             ), false, undefined, true, addressDetailsMetaKey)
         } finally {
-            if (addressBootstrapTimeoutRef.current) {
+            if (!isActiveBootstrap()) return
+            if (
+                addressBootstrapTimeoutRef.current &&
+                addressBootstrapTimeoutOwnerRef.current === bootstrapKey
+            ) {
                 clearTimeout(addressBootstrapTimeoutRef.current)
                 addressBootstrapTimeoutRef.current = null
+                addressBootstrapTimeoutOwnerRef.current = null
             }
             addressBootstrapTimeoutRef.current = setTimeout(() => {
+                if (addressBootstrapTimeoutOwnerRef.current !== bootstrapKey) {
+                    return
+                }
+                if (!isActiveBootstrap()) {
+                    return
+                }
                 addressBootstrapTimeoutRef.current = null
+                addressBootstrapTimeoutOwnerRef.current = null
                 showScanTypeSelection(address)
                 if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
                     activeAddressBootstrapKeyRef.current = null
                 }
             }, 500)
+            addressBootstrapTimeoutOwnerRef.current = bootstrapKey
         }
     }
 

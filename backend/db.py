@@ -2,6 +2,7 @@
 import os
 import boto3
 import uuid
+from typing import Optional
 from datetime import datetime
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
@@ -56,7 +57,7 @@ def get_chats_table():
 def get_messages_table():
     return dynamodb.Table(MESSAGES_TABLE_NAME)
 
-def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str = None, address: str = None):
+def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: Optional[str] = None, address: Optional[str] = None):
     """
     Creates or updates a chat session.
     """
@@ -112,7 +113,7 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
         print(f"Error saving chat: {e}")
         return None
 
-def save_message(chat_id: str, role: str, content: str, trace_id: str = None, idempotency_key: str = None):
+def save_message(chat_id: str, role: str, content: str, trace_id: Optional[str] = None, idempotency_key: Optional[str] = None):
     """
     Saves a message to the MessagesTable.
     """
@@ -182,7 +183,7 @@ def save_message(chat_id: str, role: str, content: str, trace_id: str = None, id
         print(f"Error saving message: {e}")
         return None
 
-def get_user_chats(user_id: int, limit: int = 20, last_key: dict = None):
+def get_user_chats(user_id: int, limit: int = 20, last_key: Optional[dict] = None):
     """
     Retrieves chats for a specific user, sorted by recently updated.
     Supports pagination via last_key.
@@ -351,7 +352,7 @@ FAVOURITES_TABLE_NAME = os.environ.get('FAVOURITES_TABLE')
 def get_favourites_table():
     return dynamodb.Table(FAVOURITES_TABLE_NAME)
 
-def save_favourite(user_id: int, address: str, name: str = None):
+def save_favourite(user_id: int, address: str, name: Optional[str] = None):
     """
     Add an address to user's favourites.
     """
