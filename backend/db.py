@@ -4,12 +4,51 @@ import boto3
 import uuid
 from datetime import datetime
 from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.types import TypeSerializer
 
 dynamodb = boto3.resource('dynamodb')
 
 CHATS_TABLE_NAME = os.environ.get('CHATS_TABLE')
 MESSAGES_TABLE_NAME = os.environ.get('MESSAGES_TABLE')
+IDEMPOTENCY_GUARD_PREFIX = "__idempotency_guard__#"
+_TYPE_SERIALIZER = TypeSerializer()
+
+
+def _serialize_item_for_transact(item: dict) -> dict:
+    """
+    DynamoDB transact_write_items on the low-level client requires typed values.
+    """
+    return {key: _TYPE_SERIALIZER.serialize(value) for key, value in item.items()}
+
+
+def _build_idempotency_guard_sort_key(idempotency_key: str) -> str:
+    return f"{IDEMPOTENCY_GUARD_PREFIX}{idempotency_key}"
+
+
+def _is_idempotency_guard_item(item: dict) -> bool:
+    created_at = item.get('created_at')
+    if isinstance(created_at, str) and created_at.startswith(IDEMPOTENCY_GUARD_PREFIX):
+        return True
+    return item.get('item_type') == 'idempotency_guard'
+
+
+def _get_idempotency_guard_item(chat_id: str, idempotency_key: str):
+    if not MESSAGES_TABLE_NAME:
+        return None
+    try:
+        table = get_messages_table()
+        response = table.get_item(
+            Key={
+                'chat_id': chat_id,
+                'created_at': _build_idempotency_guard_sort_key(idempotency_key)
+            },
+            ConsistentRead=True
+        )
+        return response.get('Item')
+    except ClientError as e:
+        print(f"Error fetching idempotency guard for chat {chat_id}: {e}")
+        return None
 
 def get_chats_table():
     return dynamodb.Table(CHATS_TABLE_NAME)
@@ -73,37 +112,6 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
         print(f"Error saving chat: {e}")
         return None
 
-def _find_message_by_idempotency_key(chat_id: str, idempotency_key: str):
-    """
-    Finds an existing message in a chat by idempotency key.
-    Returns message_id if found, otherwise None.
-    """
-    if not MESSAGES_TABLE_NAME:
-        return None
-
-    try:
-        table = get_messages_table()
-        query_params = {
-            'KeyConditionExpression': Key('chat_id').eq(chat_id),
-            'FilterExpression': Attr('idempotency_key').eq(idempotency_key),
-            'ScanIndexForward': False
-        }
-
-        while True:
-            response = table.query(**query_params)
-            items = response.get('Items', [])
-            if items:
-                return items[0].get('message_id')
-
-            last_key = response.get('LastEvaluatedKey')
-            if not last_key:
-                return None
-            query_params['ExclusiveStartKey'] = last_key
-    except ClientError as e:
-        print(f"Error finding message by idempotency key: {e}")
-        return None
-
-
 def save_message(chat_id: str, role: str, content: str, trace_id: str = None, idempotency_key: str = None):
     """
     Saves a message to the MessagesTable.
@@ -112,33 +120,65 @@ def save_message(chat_id: str, role: str, content: str, trace_id: str = None, id
         print("MESSAGES_TABLE is not set")
         return None
 
-    try:
-        table = get_messages_table()
-        if idempotency_key:
-            existing_message_id = _find_message_by_idempotency_key(chat_id, idempotency_key)
-            if existing_message_id:
-                print(f"Message with idempotency_key {idempotency_key} already exists in chat {chat_id}")
-                return existing_message_id
+    table = get_messages_table()
+    timestamp = datetime.utcnow().isoformat()
+    message_id = str(uuid.uuid4())
 
-        timestamp = datetime.utcnow().isoformat()
-        message_id = str(uuid.uuid4())
-        
-        item = {
+    message_item = {
+        'chat_id': chat_id,
+        'created_at': timestamp,
+        'message_id': message_id,
+        'role': role,
+        'content': content,
+    }
+    if trace_id:
+        message_item['trace_id'] = trace_id
+    if idempotency_key:
+        message_item['idempotency_key'] = idempotency_key
+
+    try:
+        if not idempotency_key:
+            table.put_item(Item=message_item)
+            print(f"Message saved to chat {chat_id}")
+            return message_id
+
+        guard_item = {
             'chat_id': chat_id,
-            'created_at': timestamp,
+            'created_at': _build_idempotency_guard_sort_key(idempotency_key),
+            'item_type': 'idempotency_guard',
+            'idempotency_key': idempotency_key,
             'message_id': message_id,
-            'role': role,
-            'content': content,
+            'message_created_at': timestamp,
         }
-        if trace_id:
-            item['trace_id'] = trace_id
-        if idempotency_key:
-            item['idempotency_key'] = idempotency_key
-            
-        table.put_item(Item=item)
-        print(f"Message saved to chat {chat_id}")
+
+        dynamodb.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    'Put': {
+                        'TableName': MESSAGES_TABLE_NAME,
+                        'Item': _serialize_item_for_transact(guard_item),
+                        'ConditionExpression': 'attribute_not_exists(chat_id) AND attribute_not_exists(created_at)',
+                    }
+                },
+                {
+                    'Put': {
+                        'TableName': MESSAGES_TABLE_NAME,
+                        'Item': _serialize_item_for_transact(message_item),
+                        'ConditionExpression': 'attribute_not_exists(chat_id) AND attribute_not_exists(created_at)',
+                    }
+                }
+            ]
+        )
+        print(f"Message saved to chat {chat_id} with idempotency_key {idempotency_key}")
         return message_id
     except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code')
+        if idempotency_key and error_code == 'TransactionCanceledException':
+            existing_guard = _get_idempotency_guard_item(chat_id, idempotency_key)
+            if existing_guard and existing_guard.get('message_id'):
+                existing_message_id = existing_guard['message_id']
+                print(f"Message with idempotency_key {idempotency_key} already exists in chat {chat_id}")
+                return existing_message_id
         print(f"Error saving message: {e}")
         return None
 
@@ -229,11 +269,19 @@ def get_chat_messages(chat_id: str):
 
     try:
         table = get_messages_table()
-        response = table.query(
-            KeyConditionExpression=Key('chat_id').eq(chat_id),
-            ScanIndexForward=True # Ascending order (oldest first)
-        )
-        return response.get('Items', [])
+        query_params = {
+            'KeyConditionExpression': Key('chat_id').eq(chat_id),
+            'ScanIndexForward': True # Ascending order (oldest first)
+        }
+        items = []
+        while True:
+            response = table.query(**query_params)
+            items.extend(response.get('Items', []))
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+            query_params['ExclusiveStartKey'] = last_key
+        return [item for item in items if not _is_idempotency_guard_item(item)]
     except ClientError as e:
         print(f"Error fetching messages for chat {chat_id}: {e}")
         return []
@@ -242,21 +290,8 @@ def get_last_message(chat_id: str):
     """
     Retrieves the last (most recent) message for a specific chat.
     """
-    if not MESSAGES_TABLE_NAME:
-        return None
-
-    try:
-        table = get_messages_table()
-        response = table.query(
-            KeyConditionExpression=Key('chat_id').eq(chat_id),
-            ScanIndexForward=False,  # Descending order (newest first)
-            Limit=1
-        )
-        items = response.get('Items', [])
-        return items[0] if items else None
-    except ClientError as e:
-        print(f"Error fetching last message for chat {chat_id}: {e}")
-        return None
+    recent_messages = get_recent_chat_messages(chat_id, limit=1)
+    return recent_messages[0] if recent_messages else None
 
 def get_recent_chat_messages(chat_id: str, limit: int = 20):
     """
@@ -268,15 +303,28 @@ def get_recent_chat_messages(chat_id: str, limit: int = 20):
 
     try:
         table = get_messages_table()
-        # Fetch in reverse order (newest first) to get the last N
-        response = table.query(
-            KeyConditionExpression=Key('chat_id').eq(chat_id),
-            ScanIndexForward=False,  # Descending order, newest first
-            Limit=limit
-        )
-        items = response.get('Items', [])
+        query_params = {
+            'KeyConditionExpression': Key('chat_id').eq(chat_id),
+            'ScanIndexForward': False,  # Descending order, newest first
+            'Limit': max(limit * 2, 20),
+        }
+        collected_items = []
+        while len(collected_items) < limit:
+            response = table.query(**query_params)
+            for item in response.get('Items', []):
+                if _is_idempotency_guard_item(item):
+                    continue
+                collected_items.append(item)
+                if len(collected_items) >= limit:
+                    break
+
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+            query_params['ExclusiveStartKey'] = last_key
+
         # Reverse to return chronological order (oldest first)
-        return items[::-1]
+        return collected_items[::-1]
     except ClientError as e:
         print(f"Error fetching recent messages for chat {chat_id}: {e}")
         return []

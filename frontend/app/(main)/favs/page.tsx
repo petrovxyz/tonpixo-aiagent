@@ -9,6 +9,7 @@ import axios from "axios"
 import { useTelegram } from "@/context/TelegramContext"
 import { useToast } from "@/components/Toast"
 import { getApiUrl } from "@/lib/backendUrl"
+import { buildChatRoute } from "../chat/bootstrapUtils"
 
 interface Favourite {
     address: string
@@ -175,7 +176,7 @@ export default function FavsPage() {
                                         createRipple(e, fav.address)
                                         setTimeout(() => {
                                             const chatId = crypto.randomUUID()
-                                            router.push(`/chat?chat_id=${encodeURIComponent(chatId)}&address=${encodeURIComponent(fav.address)}`)
+                                            router.push(buildChatRoute(chatId, fav.address))
                                         }, 150)
                                     }}
                                     className="w-full relative overflow-hidden bg-white/10 hover:bg-white/15 rounded-3xl p-4 text-left transition-all duration-200 active:scale-[0.98] group cursor-pointer"

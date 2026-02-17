@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { isValidElement, useState } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
@@ -145,8 +145,8 @@ export const AddressDetailsMessage = ({ data, animate = false }: { data: Address
                         <span className="text-white"><span className="font-semibold">Status:</span> {data.status}</span>
                         <span className="text-white"><span className="font-semibold">Is wallet:</span> {data.isWallet ? "yes" : "no"}</span>
                         <span className="text-white"><span className="font-semibold">Interfaces:</span> {data.interfaces?.join(", ") || "none"}</span>
-                        <span className="text-white"><span className="font-semibold">Last activity:</span> {data.lastActivity} UTC</span>
-                        <span className="text-white"><span className="font-semibold">Balance:</span> {data.balance} TON</span>
+                        <span className="text-white"><span className="font-semibold">Last activity:</span> {data.lastActivity && data.lastActivity !== "" ? `${data.lastActivity} UTC` : "N/A"}</span>
+                        <span className="text-white"><span className="font-semibold">Balance:</span> {data.balance !== undefined && data.balance !== null && data.balance !== "" ? `${data.balance} TON` : "—"}</span>
                         <span className="text-white"><span className="font-semibold">Is scam:</span> {data.isScam ? "yes" : "no"}</span>
                     </div>
                 </div>
@@ -167,13 +167,31 @@ export const AddressDetailsMessage = ({ data, animate = false }: { data: Address
     )
 }
 
+const isAddressDetailsData = (value: unknown): value is AddressDetailsData => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false
+    const record = value as Record<string, unknown>
+
+    if (record.type !== "address_details") return false
+    if (typeof record.address !== "string" || record.address.trim() === "") return false
+    if (record.rawAddress !== undefined && typeof record.rawAddress !== "string") return false
+    if (record.status !== undefined && typeof record.status !== "string") return false
+    if (record.isWallet !== undefined && typeof record.isWallet !== "boolean") return false
+    if (record.interfaces !== undefined && (!Array.isArray(record.interfaces) || record.interfaces.some(item => typeof item !== "string"))) return false
+    if (record.lastActivity !== undefined && typeof record.lastActivity !== "string") return false
+    if (record.balance !== undefined && typeof record.balance !== "string") return false
+    if (record.isScam !== undefined && typeof record.isScam !== "boolean") return false
+    if (record.hasError !== undefined && typeof record.hasError !== "boolean") return false
+
+    return true
+}
+
 export const parseStoredMessage = (content: string): { content: React.ReactNode; isSystemMessage: boolean } => {
     try {
         if (content.startsWith("{") && content.includes("\"type\"")) {
-            const parsed = JSON.parse(content) as { type?: string }
-            if (parsed.type === "address_details") {
+            const parsed: unknown = JSON.parse(content)
+            if (isAddressDetailsData(parsed)) {
                 return {
-                    content: <AddressDetailsMessage data={parsed as AddressDetailsData} animate={false} />,
+                    content: <AddressDetailsMessage data={parsed} animate={false} />,
                     isSystemMessage: true
                 }
             }
@@ -258,9 +276,23 @@ export const MessageBubble = ({
     }
 
     const getTextContent = (node: React.ReactNode): string => {
-        if (typeof node === "string") return node
+        if (node === null || node === undefined || typeof node === "boolean") return ""
+        if (typeof node === "string" || typeof node === "number") return String(node)
         if (Array.isArray(node)) return node.map(getTextContent).join("")
+        if (isValidElement(node)) {
+            const props = node.props as { children?: React.ReactNode; copyText?: unknown }
+            if (typeof props.copyText === "string" && props.copyText.trim().length > 0) {
+                return props.copyText
+            }
+            return getTextContent(props.children)
+        }
         return ""
+    }
+
+    const getCopyTextFallback = (node: React.ReactNode): string => {
+        if (!isValidElement(node)) return ""
+        const copyText = (node.props as { copyText?: unknown }).copyText
+        return typeof copyText === "string" ? copyText : ""
     }
 
     return (
@@ -387,7 +419,10 @@ export const MessageBubble = ({
                                 )}
                                 <ActionButton
                                     variant={role === "user" ? "icon_user" : "icon_agent"}
-                                    onClick={() => onCopy?.(typeof content === "string" ? content : getTextContent(content))}
+                                    onClick={() => {
+                                        const extractedText = getTextContent(content)
+                                        onCopy?.(extractedText || getCopyTextFallback(content))
+                                    }}
                                 >
                                     <FontAwesomeIcon icon={faCopy} />
                                 </ActionButton>
@@ -399,4 +434,3 @@ export const MessageBubble = ({
         </motion.div>
     )
 }
-

@@ -92,7 +92,6 @@ function ChatContent() {
     const [count, setCount] = useState<number>(0)
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([])
     const [jobId, setJobId] = useState<string | null>(null)
-    const [, setChatId] = useState<string | null>(null)
     const [streamingContent, setStreamingContent] = useState("")
     const [pendingAddress, setPendingAddress] = useState<string | null>(null)
     const [currentScanType, setCurrentScanType] = useState<string | null>(null)
@@ -115,6 +114,7 @@ function ChatContent() {
     const prevRouteChatIdRef = useRef<string | null>(chatIdParam)
     const activeHistoryRequestIdRef = useRef(0)
     const activeAddressBootstrapKeyRef = useRef<string | null>(null)
+    const addressBootstrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const failedAutoBootstrapKeysRef = useRef<Set<string>>(new Set())
     const activeJobIdRef = useRef<string | null>(null) // Ref to track the currently active job for cleanup
 
@@ -145,12 +145,10 @@ function ChatContent() {
 
         // Preserve in-flight session state when URL catches up after ensureChatId().
         if (chatIdParam && activeSessionRef.current && chatIdRef.current === chatIdParam) {
-            setChatId(chatIdParam)
             return
         }
 
         chatIdRef.current = chatIdParam
-        setChatId(chatIdParam)
         activeSessionRef.current = false
         setJobId(null)
         activeJobIdRef.current = null
@@ -163,6 +161,10 @@ function ChatContent() {
         setAwaitingTransactionLimit(false)
         setCount(0)
         setIsFavourite(false)
+        if (addressBootstrapTimeoutRef.current) {
+            clearTimeout(addressBootstrapTimeoutRef.current)
+            addressBootstrapTimeoutRef.current = null
+        }
         failedAutoBootstrapKeysRef.current.clear()
     }, [chatIdParam])
 
@@ -184,6 +186,10 @@ function ChatContent() {
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort()
+            }
+            if (addressBootstrapTimeoutRef.current) {
+                clearTimeout(addressBootstrapTimeoutRef.current)
+                addressBootstrapTimeoutRef.current = null
             }
             activeAddressBootstrapKeyRef.current = null
             // Cancel any in-progress job when leaving chat
@@ -257,13 +263,11 @@ function ChatContent() {
 
         if (chatIdParam) {
             chatIdRef.current = chatIdParam
-            setChatId(chatIdParam)
             return chatIdParam
         }
 
         const newId = crypto.randomUUID()
         console.log(`[CHAT-ID] Creating NEW chatId: ${newId}`)
-        setChatId(newId)
         chatIdRef.current = newId
 
         router.replace(buildChatRoute(newId, addressParam))
@@ -298,7 +302,6 @@ function ChatContent() {
 
             const requestId = ++activeHistoryRequestIdRef.current
             console.log(`[CHAT] Loading history for chat ${chatIdParam}`)
-            setChatId(chatIdParam)
             chatIdRef.current = chatIdParam
             setIsLoading(true)
 
@@ -681,7 +684,12 @@ function ChatContent() {
                 />
             ), false, undefined, true, addressDetailsMetaKey)
         } finally {
-            setTimeout(() => {
+            if (addressBootstrapTimeoutRef.current) {
+                clearTimeout(addressBootstrapTimeoutRef.current)
+                addressBootstrapTimeoutRef.current = null
+            }
+            addressBootstrapTimeoutRef.current = setTimeout(() => {
+                addressBootstrapTimeoutRef.current = null
                 showScanTypeSelection(address)
                 if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
                     activeAddressBootstrapKeyRef.current = null
@@ -780,7 +788,7 @@ function ChatContent() {
         // Mark that we're in an active session to prevent loadHistory from overwriting
         activeSessionRef.current = true
         setMessages(prev => appendMessage(prev, {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).substring(2, 11),
             role,
             content,
             timestamp: new Date(),
