@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faMagnifyingGlass, faArrowUp, faSpinner, faExclamationCircle } from "@fortawesome/free-solid-svg-icons"
 import { validateTonAddress } from "@/lib/tonAddress"
 import { getAssetUrl } from "@/lib/assetsUrl"
+import { buildChatRoute } from "../chat/bootstrapUtils"
 
 // --- Data ---
 const QA_ITEMS: QAItem[] = [
@@ -90,7 +91,8 @@ export default function Home() {
 
       // Use the normalized address for the chat
       const addressToUse = result.normalizedAddress || trimmed
-      router.push(`/chat?address=${encodeURIComponent(addressToUse)}`)
+      const chatId = crypto.randomUUID()
+      router.push(buildChatRoute(chatId, addressToUse))
     } catch (err) {
       console.error("Validation error:", err)
       setValidationError("Failed to validate address. Please try again.")

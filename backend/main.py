@@ -602,6 +602,7 @@ class SaveMessageRequest(BaseModel):
     role: str
     content: str
     trace_id: str | None = None
+    idempotency_key: str | None = None
 
 @app.post("/api/chat/{chat_id}/message")
 async def manual_save_message(chat_id: str, request: SaveMessageRequest):
@@ -610,7 +611,7 @@ async def manual_save_message(chat_id: str, request: SaveMessageRequest):
     """
     print(f"[CHAT] Manually saving message to {chat_id}: {request.role}")
     try:
-        msg_id = save_message(chat_id, request.role, request.content, request.trace_id)
+        msg_id = save_message(chat_id, request.role, request.content, request.trace_id, request.idempotency_key)
         return {"status": "ok", "message_id": msg_id}
     except Exception as e:
         print(f"[CHAT] Error saving message: {e}")
