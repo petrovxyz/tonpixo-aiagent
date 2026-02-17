@@ -173,14 +173,22 @@ def save_message(chat_id: str, role: str, content: str, trace_id: Optional[str] 
         print(f"Message saved to chat {chat_id} with idempotency_key {idempotency_key}")
         return message_id
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code')
+        error_details = e.response.get('Error', {})
+        error_code = error_details.get('Code')
         if idempotency_key and error_code == 'TransactionCanceledException':
             existing_guard = _get_idempotency_guard_item(chat_id, idempotency_key)
             if existing_guard and existing_guard.get('message_id'):
                 existing_message_id = existing_guard['message_id']
                 print(f"Message with idempotency_key {idempotency_key} already exists in chat {chat_id}")
                 return existing_message_id
-        print(f"Error saving message: {e}")
+            cancellation_reasons = e.response.get('CancellationReasons')
+            print(
+                f"Transaction canceled while saving message in chat {chat_id} "
+                f"with idempotency_key {idempotency_key}. "
+                f"ErrorDetails: {error_details}. "
+                f"CancellationReasons: {cancellation_reasons}"
+            )
+        print(f"Error saving message: {e}. ErrorDetails: {error_details}")
         return None
 
 def get_user_chats(user_id: int, limit: int = 20, last_key: Optional[dict] = None):

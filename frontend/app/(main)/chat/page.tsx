@@ -702,30 +702,30 @@ function ChatContent() {
                 />
             ), false, undefined, true, addressDetailsMetaKey)
         } finally {
-            if (!isActiveBootstrap()) return
-            if (
-                addressBootstrapTimeoutRef.current &&
-                addressBootstrapTimeoutOwnerRef.current === bootstrapKey
-            ) {
-                clearTimeout(addressBootstrapTimeoutRef.current)
-                addressBootstrapTimeoutRef.current = null
-                addressBootstrapTimeoutOwnerRef.current = null
+            if (isActiveBootstrap()) {
+                if (
+                    addressBootstrapTimeoutRef.current &&
+                    addressBootstrapTimeoutOwnerRef.current === bootstrapKey
+                ) {
+                    clearTimeout(addressBootstrapTimeoutRef.current)
+                    addressBootstrapTimeoutRef.current = null
+                    addressBootstrapTimeoutOwnerRef.current = null
+                }
+                addressBootstrapTimeoutRef.current = setTimeout(() => {
+                    if (
+                        addressBootstrapTimeoutOwnerRef.current === bootstrapKey &&
+                        isActiveBootstrap()
+                    ) {
+                        addressBootstrapTimeoutRef.current = null
+                        addressBootstrapTimeoutOwnerRef.current = null
+                        showScanTypeSelection(address)
+                        if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
+                            activeAddressBootstrapKeyRef.current = null
+                        }
+                    }
+                }, 500)
+                addressBootstrapTimeoutOwnerRef.current = bootstrapKey
             }
-            addressBootstrapTimeoutRef.current = setTimeout(() => {
-                if (addressBootstrapTimeoutOwnerRef.current !== bootstrapKey) {
-                    return
-                }
-                if (!isActiveBootstrap()) {
-                    return
-                }
-                addressBootstrapTimeoutRef.current = null
-                addressBootstrapTimeoutOwnerRef.current = null
-                showScanTypeSelection(address)
-                if (activeAddressBootstrapKeyRef.current === bootstrapKey) {
-                    activeAddressBootstrapKeyRef.current = null
-                }
-            }, 500)
-            addressBootstrapTimeoutOwnerRef.current = bootstrapKey
         }
     }
 
