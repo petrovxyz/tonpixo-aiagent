@@ -4,7 +4,7 @@ import boto3
 import uuid
 from datetime import datetime
 from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 dynamodb = boto3.resource('dynamodb')
 
@@ -73,7 +73,38 @@ def save_chat(user_id: int, chat_id: str, title: str = "New Chat", job_id: str =
         print(f"Error saving chat: {e}")
         return None
 
-def save_message(chat_id: str, role: str, content: str, trace_id: str = None):
+def _find_message_by_idempotency_key(chat_id: str, idempotency_key: str):
+    """
+    Finds an existing message in a chat by idempotency key.
+    Returns message_id if found, otherwise None.
+    """
+    if not MESSAGES_TABLE_NAME:
+        return None
+
+    try:
+        table = get_messages_table()
+        query_params = {
+            'KeyConditionExpression': Key('chat_id').eq(chat_id),
+            'FilterExpression': Attr('idempotency_key').eq(idempotency_key),
+            'ScanIndexForward': False
+        }
+
+        while True:
+            response = table.query(**query_params)
+            items = response.get('Items', [])
+            if items:
+                return items[0].get('message_id')
+
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                return None
+            query_params['ExclusiveStartKey'] = last_key
+    except ClientError as e:
+        print(f"Error finding message by idempotency key: {e}")
+        return None
+
+
+def save_message(chat_id: str, role: str, content: str, trace_id: str = None, idempotency_key: str = None):
     """
     Saves a message to the MessagesTable.
     """
@@ -83,6 +114,12 @@ def save_message(chat_id: str, role: str, content: str, trace_id: str = None):
 
     try:
         table = get_messages_table()
+        if idempotency_key:
+            existing_message_id = _find_message_by_idempotency_key(chat_id, idempotency_key)
+            if existing_message_id:
+                print(f"Message with idempotency_key {idempotency_key} already exists in chat {chat_id}")
+                return existing_message_id
+
         timestamp = datetime.utcnow().isoformat()
         message_id = str(uuid.uuid4())
         
@@ -95,6 +132,8 @@ def save_message(chat_id: str, role: str, content: str, trace_id: str = None):
         }
         if trace_id:
             item['trace_id'] = trace_id
+        if idempotency_key:
+            item['idempotency_key'] = idempotency_key
             
         table.put_item(Item=item)
         print(f"Message saved to chat {chat_id}")

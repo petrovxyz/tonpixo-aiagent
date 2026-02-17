@@ -90,7 +90,8 @@ export default function Home() {
 
       // Use the normalized address for the chat
       const addressToUse = result.normalizedAddress || trimmed
-      router.push(`/chat?address=${encodeURIComponent(addressToUse)}`)
+      const chatId = crypto.randomUUID()
+      router.push(`/chat?chat_id=${encodeURIComponent(chatId)}&address=${encodeURIComponent(addressToUse)}`)
     } catch (err) {
       console.error("Validation error:", err)
       setValidationError("Failed to validate address. Please try again.")
