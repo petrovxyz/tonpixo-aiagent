@@ -16,16 +16,22 @@ export function PrivacyConsentBanner() {
     const pathname = usePathname()
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [bottomOffset, setBottomOffset] = useState(BASE_OFFSET)
+    const [mounted, setMounted] = useState(false)
 
     const acknowledged = useSyncExternalStore(
         (callback) => {
             if (typeof window === "undefined") return () => {}
-            const handler = () => callback()
-            window.addEventListener("storage", handler)
-            window.addEventListener("tonpixo:privacy-ack", handler)
+            const storageHandler = (e: StorageEvent) => {
+                if (e.key === STORAGE_KEY || e.key == null) {
+                    callback()
+                }
+            }
+            const ackHandler = () => callback()
+            window.addEventListener("storage", storageHandler)
+            window.addEventListener("tonpixo:privacy-ack", ackHandler)
             return () => {
-                window.removeEventListener("storage", handler)
-                window.removeEventListener("tonpixo:privacy-ack", handler)
+                window.removeEventListener("storage", storageHandler)
+                window.removeEventListener("tonpixo:privacy-ack", ackHandler)
             }
         },
         () => {
@@ -36,8 +42,13 @@ export function PrivacyConsentBanner() {
     )
 
     useEffect(() => {
-        if (typeof window === "undefined") return
+        const mountRaf = window.requestAnimationFrame(() => {
+            setMounted(true)
+        })
+        return () => window.cancelAnimationFrame(mountRaf)
+    }, [])
 
+    useEffect(() => {
         const computeOffset = () => {
             let offset = BASE_OFFSET
             const nav = document.getElementById("bottom-nav")
@@ -67,7 +78,6 @@ export function PrivacyConsentBanner() {
     }, [pathname])
 
     const handleAgree = () => {
-        if (typeof window === "undefined") return
         localStorage.setItem(STORAGE_KEY, "1")
         window.dispatchEvent(new Event("tonpixo:privacy-ack"))
     }
@@ -82,7 +92,7 @@ export function PrivacyConsentBanner() {
 
     const shouldShow = !acknowledged
 
-    if (typeof window === "undefined" || isInitialLoading) return null
+    if (!mounted || isInitialLoading) return null
 
     return (
         <>

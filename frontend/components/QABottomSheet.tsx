@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, PanInfo } from "framer-motion"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
@@ -23,17 +23,41 @@ interface QABottomSheetProps {
 export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
     const { setIsOverlayOpen } = useUI()
     const [mounted, setMounted] = useState(false)
+    const mountRafRef = useRef<number | null>(null)
+    const cleanupRafRef = useRef<number | null>(null)
+    const mountedRef = useRef(false)
 
     // Handle mounting for Portal and global state
     useEffect(() => {
-        const mountRaf = window.requestAnimationFrame(() => {
+        if (mountRafRef.current !== null) {
+            window.cancelAnimationFrame(mountRafRef.current)
+            mountRafRef.current = null
+        }
+        if (cleanupRafRef.current !== null) {
+            window.cancelAnimationFrame(cleanupRafRef.current)
+            cleanupRafRef.current = null
+        }
+
+        mountRafRef.current = window.requestAnimationFrame(() => {
             setMounted(true)
             setIsOverlayOpen(true)
+            mountedRef.current = true
         })
         return () => {
-            window.cancelAnimationFrame(mountRaf)
-            window.requestAnimationFrame(() => {
-                setIsOverlayOpen(false)
+            if (mountRafRef.current !== null) {
+                window.cancelAnimationFrame(mountRafRef.current)
+                mountRafRef.current = null
+            }
+            if (cleanupRafRef.current !== null) {
+                window.cancelAnimationFrame(cleanupRafRef.current)
+                cleanupRafRef.current = null
+            }
+            cleanupRafRef.current = window.requestAnimationFrame(() => {
+                if (mountedRef.current) {
+                    setIsOverlayOpen(false)
+                    mountedRef.current = false
+                }
+                cleanupRafRef.current = null
             })
         }
     }, [setIsOverlayOpen])
@@ -61,8 +85,8 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
             {/* Sheet */}
             <motion.div
                 drag="y"
-                dragConstraints={{ top: 0 }}
-                dragElastic={0.1}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.2 }}
                 onDragEnd={onDragEnd}
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
@@ -79,7 +103,9 @@ export const QABottomSheet = ({ item, onClose }: QABottomSheetProps) => {
                 {/* Close Button (Absolute) */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-40 w-8 h-8 flex items-center justify-center bg-black/5 hover:bg-black/10 rounded-full text-gray-500 transition-colors cursor-pointer"
+                    type="button"
+                    aria-label="Close"
+                    className="absolute top-4 right-4 z-40 w-8 h-8 flex items-center justify-center bg-black/5 hover:bg-black/10 rounded-full text-gray-500 active:scale-95 transition-all cursor-pointer"
                 >
                     <FontAwesomeIcon icon={faTimes} size="sm" />
                 </button>

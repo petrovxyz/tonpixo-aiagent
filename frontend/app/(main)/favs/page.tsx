@@ -107,7 +107,7 @@ export default function FavsPage() {
 
     const hasUser = Boolean(user?.id)
     const visibleFavourites = hasUser ? favourites : []
-    const isLoading = hasUser && isFetching
+    const isLoading = user === undefined || (hasUser && isFetching)
 
     return (
         <div className="relative w-full flex flex-col max-w-2xl mx-auto px-6 pb-6">

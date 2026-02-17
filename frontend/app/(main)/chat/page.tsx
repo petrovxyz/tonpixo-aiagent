@@ -347,8 +347,8 @@ const MessageBubble = ({
                     <Image
                         src={getAssetUrl("logo.svg")}
                         alt="Agent"
-                        width={24}
-                        height={24}
+                        width={18}
+                        height={18}
                         style={{ width: "auto", height: "auto" }}
                         className="object-contain"
                         loading="lazy"
@@ -775,7 +775,7 @@ function ChatContent() {
     }, [chatIdParam, user, addressParam, router, showToast])
 
     // Generate Chat ID if needed when starting interaction
-    const ensureChatId = () => {
+    const ensureChatId = useCallback(() => {
         // Use ref to get the latest value, avoiding stale closures
         if (chatIdRef.current) {
             console.log(`[CHAT-ID] Returning existing chatId: ${chatIdRef.current}`)
@@ -806,7 +806,7 @@ function ChatContent() {
         newUrl.searchParams.set('chat_id', newId)
         window.history.pushState({}, '', newUrl.toString())
         return newId
-    }
+    }, [setChatId])
 
     // Get scan type label for messages
     const getScanTypeLabel = (scanType: string) => {
@@ -1517,7 +1517,7 @@ function ChatContent() {
             setIsLoading(false)
             setStreamingContent("")
         }
-    }, [jobId, user?.id])
+    }, [jobId, user?.id, ensureChatId])
 
     const handleSend = async () => {
         if (!inputValue.trim()) return
