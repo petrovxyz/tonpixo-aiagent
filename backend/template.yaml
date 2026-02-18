@@ -34,6 +34,23 @@ Parameters:
     Type: String
     Description: "Langfuse Host URL"
     Default: "https://cloud.langfuse.com"
+  McpBaseUrl:
+    Type: String
+    Description: "Public HTTPS URL of tonpixo-mcp service (for example https://mcp.example.com)"
+    Default: ""
+  McpBearerToken:
+    Type: String
+    Description: "Shared bearer token used by AWS Lambda MCP client"
+    NoEcho: true
+    Default: ""
+  McpTimeoutMs:
+    Type: Number
+    Description: "MCP HTTP timeout in milliseconds"
+    Default: 20000
+  McpRetryMax:
+    Type: Number
+    Description: "MCP HTTP retry count for transient failures"
+    Default: 2
 
 Conditions:
   IsDevProfile: !Equals [!Ref DeploymentProfile, dev]
@@ -77,7 +94,7 @@ Resources:
       Description: "Secrets for Tonpixo"
       SecretString:
         Fn::Sub:
-          - '{"TONAPI_KEY":"${TonApiKey}","TELEGRAM_BOT_TOKEN":"${ResolvedTelegramBotToken}","LANGFUSE_SECRET_KEY":"${LangfuseSecretKey}","LANGFUSE_PUBLIC_KEY":"${LangfusePublicKey}","LANGFUSE_HOST":"${LangfuseHost}"}'
+          - '{"TONAPI_KEY":"${TonApiKey}","TELEGRAM_BOT_TOKEN":"${ResolvedTelegramBotToken}","LANGFUSE_SECRET_KEY":"${LangfuseSecretKey}","LANGFUSE_PUBLIC_KEY":"${LangfusePublicKey}","LANGFUSE_HOST":"${LangfuseHost}","MCP_BEARER_TOKEN":"${McpBearerToken}"}'
           - ResolvedTelegramBotToken: !If [IsDevProfile, !Ref TelegramBotTokenDev, !Ref TelegramBotTokenMain]
 
   JobsQueue:
@@ -134,6 +151,10 @@ Resources:
           # Athena configuration
           ATHENA_WORKGROUP: !Ref AthenaWorkGroup
           GLUE_DATABASE: !Ref GlueDatabase
+          # MCP configuration
+          MCP_BASE_URL: !Ref McpBaseUrl
+          MCP_TIMEOUT_MS: !Ref McpTimeoutMs
+          MCP_RETRY_MAX: !Ref McpRetryMax
           # Langfuse configuration
           LANGFUSE_TRACING_ENVIRONMENT: !Sub "${AWS::StackName}"
           DEPLOYMENT_PROFILE: !Ref DeploymentProfile

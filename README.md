@@ -131,6 +131,10 @@ You will be prompted to enter parameters. Have the following ready:
 *   **LangfuseSecretKey**: your Secret Key from Langfuse.
 *   **LangfusePublicKey**: your Public Key from Langfuse.
 *   **LangfuseHost**: defaults to `https://cloud.langfuse.com`.
+*   **McpBaseUrl**: public HTTPS URL of your MCP service (e.g. `https://mcp.example.com`).
+*   **McpBearerToken**: shared bearer token for Lambda -> MCP authentication.
+*   **McpTimeoutMs**: request timeout in milliseconds (default `20000`).
+*   **McpRetryMax**: retry count for transient MCP failures (default `2`).
 
 **Note:** when asked if you want to save arguments to configuration file, say **Y**.
 
@@ -328,6 +332,12 @@ You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV
     LANGFUSE_PUBLIC_KEY=pk-lf-...
     LANGFUSE_HOST=https://cloud.langfuse.com
     LANGFUSE_TRACING_ENVIRONMENT=development
+
+    # MCP tool server (required for agent tools/prompts)
+    MCP_BASE_URL=https://mcp.<your-domain>
+    MCP_BEARER_TOKEN=<shared-bearer-token>
+    MCP_TIMEOUT_MS=20000
+    MCP_RETRY_MAX=2
     ```
 
     > **Tip:** The DynamoDB table names and SQS queue URL are printed in the CloudFormation stack outputs.
