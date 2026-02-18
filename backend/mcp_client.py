@@ -1,11 +1,14 @@
 import os
 import time
+import logging
 from functools import lru_cache
 from typing import Any
 
 import requests
 
 from utils import get_config_value
+
+logger = logging.getLogger(__name__)
 
 
 class MCPClientError(RuntimeError):
@@ -28,6 +31,8 @@ class MCPClient:
         self._prompt_cache_ts = 0.0
         self._tools_cache: list[str] | None = None
         self._tools_cache_ts = 0.0
+        # Debug-only storage for latest upstream error details (never raised to callers).
+        self._last_upstream_error_detail: str | None = None
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
@@ -53,25 +58,86 @@ class MCPClient:
                 )
 
                 if response.status_code >= 500 and attempt < self.retry_max:
+                    self._last_upstream_error_detail = (
+                        f"path={path} status={response.status_code} body={response.text[:2000]}"
+                    )
+                    logger.warning(
+                        "MCP transient upstream error status=%s path=%s attempt=%s/%s; retrying",
+                        response.status_code,
+                        path,
+                        attempt + 1,
+                        self.retry_max + 1,
+                    )
+                    logger.debug(
+                        "MCP upstream transient response body path=%s status=%s body=%s",
+                        path,
+                        response.status_code,
+                        response.text[:2000],
+                    )
                     time.sleep(0.25 * (attempt + 1))
                     continue
 
                 if not response.ok:
+                    self._last_upstream_error_detail = (
+                        f"path={path} status={response.status_code} body={response.text[:2000]}"
+                    )
+                    logger.warning(
+                        "MCP request failed status=%s path=%s attempt=%s/%s",
+                        response.status_code,
+                        path,
+                        attempt + 1,
+                        self.retry_max + 1,
+                    )
+                    logger.debug(
+                        "MCP upstream error body path=%s status=%s body=%s",
+                        path,
+                        response.status_code,
+                        response.text[:2000],
+                    )
                     raise MCPClientError(
-                        f"MCP request failed ({response.status_code}) for {path}: {response.text[:500]}"
+                        f"MCP request failed (status={response.status_code}, path={path})"
                     )
 
                 try:
                     return response.json()
-                except ValueError:
-                    raise MCPClientError(f"MCP returned non-JSON response for {path}")
+                except ValueError as exc:
+                    self._last_upstream_error_detail = (
+                        f"path={path} status={response.status_code} non_json_body={response.text[:2000]}"
+                    )
+                    logger.warning(
+                        "MCP non-JSON response status=%s path=%s content_type=%s",
+                        response.status_code,
+                        path,
+                        response.headers.get("Content-Type", ""),
+                    )
+                    logger.debug(
+                        "MCP non-JSON response body path=%s status=%s body=%s",
+                        path,
+                        response.status_code,
+                        response.text[:2000],
+                    )
+                    raise MCPClientError(
+                        f"MCP returned non-JSON response (status={response.status_code}, path={path})"
+                    ) from exc
             except Exception as exc:
                 last_error = exc
+                logger.warning(
+                    "MCP request attempt failed path=%s attempt=%s/%s error_type=%s",
+                    path,
+                    attempt + 1,
+                    self.retry_max + 1,
+                    type(exc).__name__,
+                )
                 if attempt < self.retry_max:
                     time.sleep(0.25 * (attempt + 1))
                     continue
 
-        raise MCPClientError(f"MCP request error for {path}: {last_error}")
+        logger.error(
+            "MCP request exhausted retries path=%s error_type=%s",
+            path,
+            type(last_error).__name__ if last_error else "Unknown",
+        )
+        raise MCPClientError(f"MCP request error for {path}")
 
     def get_system_prompt_template(self, ttl_seconds: int = 300) -> str:
         now = time.time()
