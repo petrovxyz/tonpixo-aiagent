@@ -392,7 +392,7 @@ You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV
 
     # Agent balanced controls (optimized for context retention and stable reasoning)
     AGENT_PROMPT_MODE=full            # lean | full
-    AGENT_RECURSION_LIMIT=15
+    AGENT_RECURSION_LIMIT=30
     AGENT_MODEL_MAX_TOKENS=2048
     AGENT_HISTORY_FETCH_LIMIT=15
     AGENT_HISTORY_MAX_MESSAGES=10
