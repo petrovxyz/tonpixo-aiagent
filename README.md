@@ -386,9 +386,32 @@ You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV
     # - .env.main -> mcp-main.<your-domain> + MAIN token
     MCP_BASE_URL=https://mcp-dev.<your-domain>
     MCP_BEARER_TOKEN=<dev-bearer-token>
-    MCP_TIMEOUT_MS=20000
+    MCP_TIMEOUT_MS=30000
     MCP_RETRY_MAX=2
+    MCP_CACHE_TTL_SECONDS=900
+
+    # Agent balanced controls (optimized for context retention and stable reasoning)
+    AGENT_PROMPT_MODE=full            # lean | full
+    AGENT_RECURSION_LIMIT=15
+    AGENT_MODEL_MAX_TOKENS=2048
+    AGENT_HISTORY_FETCH_LIMIT=15
+    AGENT_HISTORY_MAX_MESSAGES=10
+    AGENT_HISTORY_MAX_CHARS=24000
+    AGENT_MESSAGE_MAX_CHARS=8000
+    AGENT_QUESTION_MAX_CHARS=8000
+    AGENT_RESOURCE_MAX_CHARS=32000
+
+    # Optional startup validation (extra MCP call; keep off for lowest latency/cost)
+    MCP_VALIDATE_TOOL_INVENTORY=0
     ```
+    If MCP variables are omitted locally, `backend/mcp_client.py` now auto-discovers a sibling
+    `../tonpixo-mcp` repo (or `TONPIXO_MCP_DIR`) and tries:
+    - domain from `runtime/caddy.env` (`MCP_DEV_DOMAIN` / `MCP_MAIN_DOMAIN`)
+    - local Docker ports (`127.0.0.1:8082` for dev, `127.0.0.1:8081` for main) when `runtime/<profile>.env` exists
+    - fallback `127.0.0.1:${TONPIXO_MCP_LOCAL_PORT:-8080}` for single-process local MCP runs
+    - bearer token from `runtime/<profile>.env` (`MCP_BEARER_TOKEN`)
+
+    This fallback is local-only (disabled inside AWS Lambda).
 
     > **Tip:** The DynamoDB table names and SQS queue URL are printed in the CloudFormation stack outputs.
     > Run `aws cloudformation describe-stacks --stack-name tonpixo-dev` to find them.
