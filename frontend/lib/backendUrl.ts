@@ -32,7 +32,7 @@ const detectDeployTarget = (hostname: string): DeployTarget => {
     if (firstLabel === "dev" || hostname.startsWith("dev-") || hostname.includes("-dev-")) {
         return "dev"
     }
-    if (firstLabel === "main" || firstLabel === "prod" || hostname.startsWith("main-")) {
+    if (firstLabel === "main" || firstLabel === "prod" || firstLabel === "app" || hostname.startsWith("main-")) {
         return "main"
     }
 
