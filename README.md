@@ -4,14 +4,27 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 
 Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
 
+> Current architecture split:
+> - `tonpixo-aiagent` (this repo) keeps the LangGraph + Bedrock orchestration brain in AWS Lambda.
+> - `tonpixo-mcp` (separate sibling repo) runs as external MCP tool/prompt server.
+> - Lambda acts as MCP client (`backend/mcp_client.py`) and calls MCP for tools/resources.
+
+## What's new (MCP split)
+
+*   Agent orchestration remains in AWS Lambda; tools/prompts moved to external MCP service.
+*   New backend MCP client with retries/timeouts and prompt/tool discovery.
+*   SAM template now includes MCP parameters: `McpBaseUrl`, `McpBearerToken`, `McpTimeoutMs`, `McpRetryMax`.
+*   Production-ready MCP setup supports separate `main`/`dev` MCP domains with distinct tokens.
+
 ## Technology stack
 
 ### Backend
 *   **Framework**: [FastAPI](https://fastapi.tiangolo.com/).
 *   **Serverless runtime**: AWS Lambda (Container Image support).
 *   **AI engine**:
-    *   [LangChain](https://www.langchain.com/) & [LangGraph](https://langchain-ai.github.io/langgraph/) - orchestration of AI agents.
-    *   **AWS Bedrock** - foundation models (Claude Haiku 4.5).
+    *   [LangChain](https://www.langchain.com/) & [LangGraph](https://langchain-ai.github.io/langgraph/) - agent orchestration in Lambda.
+    *   **AWS Bedrock** - foundation model inference (Claude Haiku 4.5).
+    *   **MCP client integration** - remote tools/prompt resources fetched from Tonpixo MCP server.
 *   **Database**:
     *   **Amazon DynamoDB** - NoSQL database for users, chats, jobs, and favorites.
     *   **Amazon S3** - object storage for transaction data (Parquet format) and analysis results.
@@ -35,6 +48,11 @@ Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
 *   **Amazon API Gateway** - REST API entry point.
 *   **Amazon Secrets Manager** - secure management of API keys and tokens.
 
+### External MCP service
+*   **Repository**: sibling repo `tonpixo-mcp` (outside this workspace root).
+*   **Hosting**: Hetzner CPX11 (`x86_64`, us-east) with Docker Compose + Caddy TLS.
+*   **Role**: exposes MCP tools/resources only (`sql_query`, `generate_chart_data`, system prompt, schemas).
+
 ---
 
 ## Example flow
@@ -44,26 +62,27 @@ Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
 User: *"How much TON did I send to Binance last month?"*
 
 ### Step 1: intent analysis & schema lookup (Agent Lambda)
-The Agent (Claude Haiku 4.5) receives the text. It retrieves the database schema from the system prompt and identifies the necessary filters.
+The Agent (Claude Haiku 4.5) receives the text in Lambda. It loads prompt/resource context via MCP and identifies necessary filters.
 
 ### Step 2: SQL generation
 The Agent generates a precise Presto/Trino SQL query. It does not fetch rows to Python; it pushes the compute to the database engine.
 
-### Step 3: serverless execution (Amazon Athena)
-1. The query is sent to Athena.
-2. Using Partition Projection, Athena instantly locates the specific S3 folder: `s3://.../data/transactions/job_id=user_123/`.
-3. It scans only the relevant Parquet files (e.g., 50KB of data) instead of the whole blockchain history.
-4. Aggregation is performed on the AWS side.
+### Step 3: tool execution (MCP -> Athena)
+1. Lambda invokes MCP `sql_query` tool over HTTPS.
+2. MCP executes the scoped query in Athena/Glue.
+3. Using Partition Projection, Athena instantly locates `s3://.../data/transactions/job_id=user_123/`.
+4. It scans only the relevant Parquet files instead of full history.
+5. Aggregation remains on AWS side.
 
 ### Step 4: result processing
-Athena returns a lightweight result to the Lambda function.
+MCP returns a lightweight result to Lambda, and LangGraph continues local reasoning.
 
 ### Step 5: final response
 The Agent interprets the number and generates a natural language response (or a JSON payload for the UI).
 
 - Zero RAM load: the Python Lambda never loaded the transaction history. It only handled the final number.
 - Cost effective: we scanned only one user's data instead of querying a full database.
-- Safety: the SQL generation layer is sandboxed, and the IAM role limits Athena to read-only access.
+- Safety: SQL guardrails are enforced in MCP and IAM permissions are scoped for Athena/Glue/S3 result paths.
 
 ---
 
@@ -72,7 +91,8 @@ The Agent interprets the number and generates a natural language response (or a 
 ```bash
 .
 ├── backend/                # Python FastAPI Serverless Application
-│   ├── agent.py            # AI Agent logic and LangGraph definition
+│   ├── agent.py            # LangGraph + Bedrock orchestration (AWS brain)
+│   ├── mcp_client.py       # MCP HTTP client for tools/resources
 │   ├── main.py             # FastAPI entry point and routes
 │   ├── template.yaml       # AWS SAM Infrastructure definition
 │   ├── requirements.txt    # Python dependencies
@@ -131,6 +151,18 @@ You will be prompted to enter parameters. Have the following ready:
 *   **LangfuseSecretKey**: your Secret Key from Langfuse.
 *   **LangfusePublicKey**: your Public Key from Langfuse.
 *   **LangfuseHost**: defaults to `https://cloud.langfuse.com`.
+*   **McpBaseUrl**: public HTTPS URL of your MCP service (e.g. `https://mcp.example.com`).
+*   **McpBearerToken**: shared bearer token for Lambda -> MCP authentication.
+*   **McpTimeoutMs**: request timeout in milliseconds (default `20000`).
+*   **McpRetryMax**: retry count for transient MCP failures (default `2`).
+
+Recommended mapping for separate stacks:
+*   **main stack (`tonpixo-main`)**: `McpBaseUrl=https://mcp-main.<your-domain>` and main token.
+*   **dev stack (`tonpixo-dev`)**: `McpBaseUrl=https://mcp-dev.<your-domain>` and dev token.
+
+These values are wired in `backend/template.yaml` as:
+*   Lambda env vars: `MCP_BASE_URL`, `MCP_TIMEOUT_MS`, `MCP_RETRY_MAX`
+*   Secret value: `MCP_BEARER_TOKEN` (inside `AppSecrets`)
 
 **Note:** when asked if you want to save arguments to configuration file, say **Y**.
 
@@ -280,6 +312,25 @@ npm run build
 
 ---
 
+## MCP service requirements
+
+The backend chat endpoints depend on external MCP service availability.
+
+Before deploying/updating AWS backend stacks, verify MCP endpoints:
+
+```bash
+curl -f https://mcp-main.<your-domain>/healthz
+curl -f https://mcp-dev.<your-domain>/healthz
+curl -H "Authorization: Bearer <MAIN_TOKEN>" https://mcp-main.<your-domain>/v1/tools
+curl -H "Authorization: Bearer <DEV_TOKEN>" https://mcp-dev.<your-domain>/v1/tools
+```
+
+Expected tools list includes:
+- `sql_query`
+- `generate_chart_data`
+
+---
+
 ## Local development
 
 ### Backend
@@ -328,7 +379,40 @@ You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV
     LANGFUSE_PUBLIC_KEY=pk-lf-...
     LANGFUSE_HOST=https://cloud.langfuse.com
     LANGFUSE_TRACING_ENVIRONMENT=development
+
+    # MCP tool server (required for agent tools/prompts)
+    # Use profile-specific endpoint/token:
+    # - .env.dev  -> mcp-dev.<your-domain> + DEV token
+    # - .env.main -> mcp-main.<your-domain> + MAIN token
+    MCP_BASE_URL=https://mcp-dev.<your-domain>
+    MCP_BEARER_TOKEN=<dev-bearer-token>
+    MCP_TIMEOUT_MS=30000
+    MCP_RETRY_MAX=2
+    MCP_CACHE_TTL_SECONDS=900
+
+    # Agent balanced controls (optimized for context retention and stable reasoning)
+    AGENT_PROMPT_MODE=full            # lean | full
+    AGENT_RECURSION_LIMIT=30
+    AGENT_MODEL_MAX_TOKENS=2048
+    AGENT_HISTORY_FETCH_LIMIT=15
+    AGENT_HISTORY_MAX_MESSAGES=10
+    AGENT_HISTORY_MAX_CHARS=24000
+    AGENT_MESSAGE_MAX_CHARS=8000
+    AGENT_QUESTION_MAX_CHARS=8000
+    AGENT_RESOURCE_MAX_CHARS=32000
+    AGENT_REQUIRE_SCHEMA_BEFORE_SQL=1
+
+    # Optional startup validation (extra MCP call; keep off for lowest latency/cost)
+    MCP_VALIDATE_TOOL_INVENTORY=0
     ```
+    If MCP variables are omitted locally, `backend/mcp_client.py` now auto-discovers a sibling
+    `../tonpixo-mcp` repo (or `TONPIXO_MCP_DIR`) and tries:
+    - domain from `runtime/caddy.env` (`MCP_DEV_DOMAIN` / `MCP_MAIN_DOMAIN`)
+    - local Docker ports (`127.0.0.1:8082` for dev, `127.0.0.1:8081` for main) when `runtime/<profile>.env` exists
+    - fallback `127.0.0.1:${TONPIXO_MCP_LOCAL_PORT:-8080}` for single-process local MCP runs
+    - bearer token from `runtime/<profile>.env` (`MCP_BEARER_TOKEN`)
+
+    This fallback is local-only (disabled inside AWS Lambda).
 
     > **Tip:** The DynamoDB table names and SQS queue URL are printed in the CloudFormation stack outputs.
     > Run `aws cloudformation describe-stacks --stack-name tonpixo-dev` to find them.

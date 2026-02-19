@@ -3,6 +3,36 @@
 :root {
   --background: #000000;
   --foreground: #ffffff;
+
+  /* Chart color schema */
+  --chart-card-bg: rgba(18, 24, 35, 0.72);
+  --chart-card-border: rgba(167, 190, 222, 0.26);
+  --chart-card-text: #f4f8ff;
+  --chart-icon-bg: rgba(255, 255, 255, 0.12);
+  --chart-button-bg: #159dff;
+  --chart-button-bg-hover: #0b88e3;
+  --chart-button-text: #ffffff;
+
+  --chart-modal-bg: #151c28;
+  --chart-modal-border: rgba(177, 198, 226, 0.18);
+  --chart-modal-divider: rgba(177, 198, 226, 0.14);
+  --chart-title-color: #f5f8ff;
+  --chart-close-color: #d7e2f7;
+
+  --chart-axis-color: #aebad0;
+  --chart-grid-color: rgba(174, 186, 208, 0.24);
+  --chart-tooltip-bg: #121925;
+  --chart-tooltip-border: rgba(177, 198, 226, 0.26);
+  --chart-tooltip-text: #f3f7ff;
+  --chart-tooltip-label: #d9e3f6;
+  --chart-legend-text: #dce6f9;
+
+  --chart-series-1: #2ea8ff;
+  --chart-series-2: #ffbf47;
+  --chart-series-3: #33d6a6;
+  --chart-series-4: #ff6b8b;
+  --chart-series-5: #9f8bff;
+  --chart-series-6: #23d4ff;
 }
 
 @theme inline {
@@ -10,6 +40,20 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
+  --color-chart-card-bg: var(--chart-card-bg);
+  --color-chart-card-border: var(--chart-card-border);
+  --color-chart-card-text: var(--chart-card-text);
+  --color-chart-modal-bg: var(--chart-modal-bg);
+  --color-chart-axis: var(--chart-axis-color);
+  --color-chart-grid: var(--chart-grid-color);
+  --color-chart-tooltip-bg: var(--chart-tooltip-bg);
+  --color-chart-tooltip-text: var(--chart-tooltip-text);
+  --color-chart-series-1: var(--chart-series-1);
+  --color-chart-series-2: var(--chart-series-2);
+  --color-chart-series-3: var(--chart-series-3);
+  --color-chart-series-4: var(--chart-series-4);
+  --color-chart-series-5: var(--chart-series-5);
+  --color-chart-series-6: var(--chart-series-6);
 }
 
 body {
