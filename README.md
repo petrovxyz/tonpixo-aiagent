@@ -400,6 +400,7 @@ You can override the auto-detection by setting `TONPIXO_ENV=dev` or `TONPIXO_ENV
     AGENT_MESSAGE_MAX_CHARS=8000
     AGENT_QUESTION_MAX_CHARS=8000
     AGENT_RESOURCE_MAX_CHARS=32000
+    AGENT_REQUIRE_SCHEMA_BEFORE_SQL=1
 
     # Optional startup validation (extra MCP call; keep off for lowest latency/cost)
     MCP_VALIDATE_TOOL_INVENTORY=0
