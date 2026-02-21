@@ -461,18 +461,29 @@ def _build_resource_guidance() -> str:
     return "\n".join(lines)
 
 
-def build_system_prompt(job_id: str, address: str) -> str:
+def _prefetch_mcp_system_prompt() -> str | None:
+    """Fetch and cache MCP system prompt before any other MCP calls."""
+    try:
+        return get_mcp_client().get_system_prompt_template()
+    except Exception as exc:
+        print(f"Failed to prefetch MCP system prompt: {exc}")
+        return None
+
+
+def build_system_prompt(job_id: str, address: str, prefetched_template: str | None = None) -> str:
     """Build a cost-aware system prompt and inject runtime scope."""
     mode = _prompt_mode()
 
     if mode == "full":
-        mcp_client = get_mcp_client()
-        try:
-            template = mcp_client.get_system_prompt_template()
-        except Exception as exc:
-            # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
-            print(f"Falling back to built-in system prompt template: {exc}")
-            template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
+        template = (prefetched_template or "").strip()
+        if not template:
+            mcp_client = get_mcp_client()
+            try:
+                template = mcp_client.get_system_prompt_template()
+            except Exception as exc:
+                # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
+                print(f"Falling back to built-in system prompt template: {exc}")
+                template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
     else:
         template = LEAN_SYSTEM_PROMPT_TEMPLATE
 
@@ -640,6 +651,8 @@ def create_data_tools(job_id: str):
 
 def create_agent_graph(job_id: str):
     """Create a LangGraph agent for analyzing financial data."""
+    # Requirement: always hit MCP system prompt resource before any other MCP call.
+    prefetched_prompt_template = _prefetch_mcp_system_prompt()
     
     # Initialize LLM
     from langchain_aws import ChatBedrock
@@ -667,7 +680,11 @@ def create_agent_graph(job_id: str):
         print(f"Error fetching job details: {e}")
     
     # System message template is served by MCP resources, with local fallback.
-    system_prompt = build_system_prompt(job_id=job_id, address=address)
+    system_prompt = build_system_prompt(
+        job_id=job_id,
+        address=address,
+        prefetched_template=prefetched_prompt_template,
+    )
 
     # Agent node - decides what to do
     def agent_node(state: AgentState) -> AgentState:
