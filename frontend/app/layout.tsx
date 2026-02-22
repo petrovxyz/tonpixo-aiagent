@@ -42,8 +42,6 @@ export default function RootLayout({
     streamUrl:
       process.env.BACKEND_STREAM_URL ||
       process.env.NEXT_PUBLIC_STREAM_URL ||
-      process.env.BACKEND_API_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
       "",
     assetsBaseUrl:
       process.env.ASSETS_BASE_URL ||

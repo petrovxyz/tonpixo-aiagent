@@ -179,10 +179,11 @@ def _int_config(name: str, default: int, min_value: int, max_value: int) -> int:
 
 
 def _prompt_mode() -> str:
-    mode = (get_config_value("AGENT_PROMPT_MODE", os.environ.get("AGENT_PROMPT_MODE", "lean")) or "lean").strip().lower()
-    if mode in {"full", "mcp", "mcp_full"}:
-        return "full"
-    return "lean"
+    # Default to MCP-backed prompt mode; lean remains opt-in.
+    mode = (get_config_value("AGENT_PROMPT_MODE", os.environ.get("AGENT_PROMPT_MODE", "full")) or "full").strip().lower()
+    if mode == "lean":
+        return "lean"
+    return "full"
 
 
 AGENT_RECURSION_LIMIT = _int_config("AGENT_RECURSION_LIMIT", 30, 4, 40)
@@ -262,6 +263,37 @@ def _normalize_chart_markdown(answer: str, question: str) -> str:
         text = _JSON_FENCE_PATTERN.sub(_replace_json_fence, text, count=1)
 
     return text
+
+
+def _extract_stream_text(content: Any) -> str:
+    """Extract plain text from provider-specific streamed chunk payloads."""
+    if not content:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+                continue
+            if isinstance(block, dict):
+                block_type = str(block.get("type", "")).lower()
+                if block_type in {"text", "text_delta"}:
+                    parts.append(str(block.get("text", "") or block.get("delta", "")))
+                continue
+            if hasattr(block, "text") and isinstance(block.text, str):
+                parts.append(block.text)
+        return "".join(parts)
+
+    if isinstance(content, dict):
+        block_type = str(content.get("type", "")).lower()
+        if block_type in {"text", "text_delta"}:
+            return str(content.get("text", "") or content.get("delta", ""))
+
+    return ""
 
 
 def _trim_history_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
@@ -464,28 +496,34 @@ def _build_resource_guidance() -> str:
 def _prefetch_mcp_system_prompt() -> str | None:
     """Fetch and cache MCP system prompt before any other MCP calls."""
     try:
-        return get_mcp_client().get_system_prompt_template()
+        # Force a fresh fetch so each agent run checks MCP prompt state first.
+        return get_mcp_client().get_system_prompt_template(ttl_seconds=0)
     except Exception as exc:
         print(f"Failed to prefetch MCP system prompt: {exc}")
         return None
 
 
 def build_system_prompt(job_id: str, address: str, prefetched_template: str | None = None) -> str:
-    """Build a cost-aware system prompt and inject runtime scope."""
+    """Build system prompt with MCP resource as primary source and inject runtime scope."""
     mode = _prompt_mode()
+    template = (prefetched_template or "").strip()
 
-    if mode == "full":
-        template = (prefetched_template or "").strip()
-        if not template:
-            mcp_client = get_mcp_client()
-            try:
-                template = mcp_client.get_system_prompt_template()
-            except Exception as exc:
-                # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
-                print(f"Falling back to built-in system prompt template: {exc}")
-                template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
-    else:
-        template = LEAN_SYSTEM_PROMPT_TEMPLATE
+    # Always attempt MCP prompt retrieval first, even when lean mode is configured.
+    if not template:
+        mcp_client = get_mcp_client()
+        try:
+            template = mcp_client.get_system_prompt_template(ttl_seconds=0).strip()
+        except Exception as exc:
+            print(f"Failed to fetch MCP system prompt in build step: {exc}")
+
+    if not template:
+        # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
+        if mode == "lean":
+            template = LEAN_SYSTEM_PROMPT_TEMPLATE
+            print("Falling back to built-in lean system prompt template.")
+        else:
+            template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
+            print("Falling back to built-in full system prompt template.")
 
     rendered_template = template.replace("__JOB_ID__", job_id).replace("__ADDRESS__", address)
     return f"{rendered_template}\n\n{_build_resource_guidance()}"
@@ -868,25 +906,10 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
             "final_answer": ""
         }
         
-        # Stream the agent execution with Langfuse callback and metadata
-        # 
-        # STRATEGY: Stream tokens in real-time with smart classification.
-        # 
-        # The challenge: We don't know if text after a tool_end is the final answer
-        # or just thinking before another tool call. 
-        # 
-        # Solution: Buffer text after each tool_end, and:
-        # - If another tool_start comes → flush buffer as "thinking" events
-        # - When streaming ends → flush remaining buffer as "token" (answer) events
-        # 
-        # For text BEFORE any tools → it's initial thinking
-        # For text DURING tool execution → it's thinking
-        # For text AFTER all tools → it's the answer
-        
-        tools_used = False
+        # Stream the agent execution with Langfuse callback and metadata.
+        # Emit token chunks immediately whenever the model is not in a tool run.
         pending_tool_count = 0
-        # Buffer for text that might be thinking or might be answer
-        post_tool_buffer: list[str] = []
+        answer_chunks: list[str] = []
         
         async for event in agent.astream_events(
             initial_state, 
@@ -901,63 +924,38 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
             
             if kind == "on_chat_model_stream":
                 # Stream token-by-token output
-                chunk = event["data"]["chunk"]
-                content = chunk.content
-                
-                # Handle different content formats from Claude
-                if content:
-                    text_content = ""
-                    
-                    # Content can be a string or a list of content blocks
-                    if isinstance(content, str):
-                        text_content = content
-                    elif isinstance(content, list):
-                        # Extract text from content blocks
-                        for block in content:
-                            if isinstance(block, str):
-                                text_content += block
-                            elif isinstance(block, dict) and block.get("type") == "text":
-                                text_content += block.get("text", "")
-                            elif hasattr(block, "text"):
-                                text_content += block.text
-                    
-                    if text_content:
-                        if not tools_used:
-                            # Before any tools - could be thinking or direct answer
-                            # Buffer it - will be classified at the end
-                            post_tool_buffer.append(text_content)
-                        elif pending_tool_count > 0:
-                            # Tool is running - this is definitely thinking/commentary
-                            yield {"type": "thinking", "content": text_content}
-                        else:
-                            # Tools are done but we don't know if more tools will come
-                            # Buffer this text until we know
-                            post_tool_buffer.append(text_content)
+                chunk = event.get("data", {}).get("chunk")
+                content = getattr(chunk, "content", None) if chunk is not None else None
+                text_content = _extract_stream_text(content)
+
+                if not text_content:
+                    continue
+
+                if pending_tool_count > 0:
+                    # During tool execution, keep content as non-final "thinking" output.
+                    yield {"type": "thinking", "content": text_content}
+                    continue
+
+                answer_chunks.append(text_content)
+                yield {"type": "token", "content": text_content}
             
             elif kind == "on_tool_start":
-                # Tool is starting - any buffered text was thinking!
-                tools_used = True
+                # Tool is starting.
                 pending_tool_count += 1
-                tool_name = event["name"]
-                
-                # Flush buffer as thinking
-                for buffered_text in post_tool_buffer:
-                    yield {"type": "thinking", "content": buffered_text}
-                post_tool_buffer = []
-                
+                tool_name = event.get("name", "tool")
                 yield {"type": "tool_start", "tool": tool_name}
             
             elif kind == "on_tool_end":
                 # Tool finished
                 pending_tool_count = max(0, pending_tool_count - 1)
-                yield {"type": "tool_end", "tool": event["name"]}
-        
-        # Stream ended - flush remaining buffer
-        # If tools were used, buffer contains the final answer
-        # If no tools were used, buffer contains the entire response (is it answer? probably)
-        final_text = _normalize_chart_markdown("".join(post_tool_buffer), question_text)
-        if final_text:
-            yield {"type": "token", "content": final_text}
+                yield {"type": "tool_end", "tool": event.get("name", "tool")}
+
+        # Preserve chart markdown normalization for final persisted content.
+        if answer_chunks:
+            streamed_text = "".join(answer_chunks)
+            normalized_text = _normalize_chart_markdown(streamed_text, question_text)
+            if normalized_text != streamed_text:
+                yield {"type": "final", "content": normalized_text}
         
         # Yield trace_id if available - try different attributes
         trace_id = None

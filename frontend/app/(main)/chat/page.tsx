@@ -1068,6 +1068,14 @@ function ChatContent() {
                                         ? { ...m, streamingText: accumulatedContent, thinkingText: accumulatedThinking || undefined, isAnalyzing: currentlyAnalyzing }
                                         : m
                                 ))
+                            } else if (data.type === "final") {
+                                accumulatedContent = data.content || ""
+                                setStreamingContent(accumulatedContent)
+                                setMessages(prev => prev.map(m =>
+                                    m.id === streamingMsgId
+                                        ? { ...m, streamingText: accumulatedContent, thinkingText: accumulatedThinking || undefined, isAnalyzing: currentlyAnalyzing }
+                                        : m
+                                ))
                             } else if (data.type === "thinking") {
                                 // Accumulate thinking/reasoning content
                                 accumulatedThinking += data.content
