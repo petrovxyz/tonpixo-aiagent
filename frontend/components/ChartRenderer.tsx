@@ -403,7 +403,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
 
     return (
         <>
-            <div className="w-full my-5 py-5 sm:py-6 px-4 sm:px-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
+            <div className="w-full my-7 py-7 sm:py-9 px-4 sm:px-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
                         <FontAwesomeIcon icon={faChartSimple} />
