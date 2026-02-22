@@ -112,6 +112,43 @@ const hexToRgba = (hex: string, alpha: number): string => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const toFiniteNumber = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const compact = value.replaceAll(',', '').trim();
+        if (!compact) {
+            return null;
+        }
+        const parsed = Number(compact);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+};
+
+const formatDataLabel = (value: unknown): string => {
+    const numeric = toFiniteNumber(value);
+    if (numeric === null) {
+        return '';
+    }
+    const sign = numeric < 0 ? '-' : '';
+    const absolute = Math.abs(numeric);
+    if (absolute >= 1_000_000_000) {
+        return `${sign}${(absolute / 1_000_000_000).toFixed(1)}B`;
+    }
+    if (absolute >= 1_000_000) {
+        return `${sign}${(absolute / 1_000_000).toFixed(1)}M`;
+    }
+    if (absolute >= 10_000) {
+        return `${sign}${(absolute / 1_000).toFixed(1)}K`;
+    }
+    if (Number.isInteger(absolute)) {
+        return `${sign}${absolute.toLocaleString()}`;
+    }
+    return `${sign}${absolute.toFixed(2)}`;
+};
+
 const deepMerge = (
     base: Record<string, unknown>,
     override: Record<string, unknown>,
@@ -229,7 +266,7 @@ const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figu
     };
 };
 
-const normalizeTracesForDisplay = (input: PlotlyTrace[]): PlotlyTrace[] =>
+const normalizeTracesForDisplay = (input: PlotlyTrace[], inModal: boolean): PlotlyTrace[] =>
     input.map((trace, index) => {
         if (!isRecord(trace)) {
             return trace;
@@ -246,17 +283,99 @@ const normalizeTracesForDisplay = (input: PlotlyTrace[]): PlotlyTrace[] =>
             marker.cornerradius = marker.cornerradius ?? 10;
             next.marker = marker;
             next.opacity = next.opacity ?? 0.95;
+            if (inModal && next.text === undefined && Array.isArray(next.y)) {
+                next.text = next.y.map((value) => formatDataLabel(value));
+                next.texttemplate = '%{text}';
+                next.textposition = 'outside';
+                next.textfont = {
+                    color: '#e8f1ff',
+                    size: 13,
+                    family: 'Inter, system-ui, sans-serif',
+                };
+                next.cliponaxis = false;
+            }
+        }
+
+        if (traceType === 'scatter' && inModal && next.text === undefined && Array.isArray(next.y)) {
+            next.text = next.y.map((value) => formatDataLabel(value));
+            next.texttemplate = '%{text}';
+            next.textposition = 'top center';
+            next.textfont = {
+                color: '#e8f1ff',
+                size: 11,
+                family: 'Inter, system-ui, sans-serif',
+            };
+            next.cliponaxis = false;
         }
 
         return next;
     });
+
+const applyYAxisHeadroomForLabels = (
+    layout: Record<string, unknown>,
+    data: PlotlyTrace[],
+    inModal: boolean,
+): Record<string, unknown> => {
+    if (!inModal) {
+        return layout;
+    }
+
+    const next = { ...layout };
+    const rawYAxis = isRecord(next.yaxis) ? { ...next.yaxis } : {};
+    if (Array.isArray(rawYAxis.range) && rawYAxis.range.length >= 2) {
+        next.yaxis = rawYAxis;
+        return next;
+    }
+
+    const values: number[] = [];
+    for (const trace of data) {
+        if (!isRecord(trace)) {
+            continue;
+        }
+        if (String(trace.type || '').toLowerCase() === 'pie') {
+            continue;
+        }
+        if (!Array.isArray(trace.y)) {
+            continue;
+        }
+        for (const value of trace.y) {
+            const numeric = toFiniteNumber(value);
+            if (numeric !== null) {
+                values.push(numeric);
+            }
+        }
+    }
+
+    if (!values.length) {
+        next.yaxis = rawYAxis;
+        return next;
+    }
+
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    if (Math.abs(maxValue - minValue) < Number.EPSILON) {
+        const pad = maxValue === 0 ? 1 : Math.abs(maxValue) * 0.2;
+        rawYAxis.range = [minValue - pad, maxValue + pad];
+        next.yaxis = rawYAxis;
+        return next;
+    }
+
+    if (minValue >= 0) {
+        rawYAxis.range = [0, maxValue * 1.2];
+    } else {
+        const span = maxValue - minValue;
+        rawYAxis.range = [minValue - span * 0.12, maxValue + span * 0.18];
+    }
+    next.yaxis = rawYAxis;
+    return next;
+};
 
 const baseLayout = (inModal: boolean): Record<string, unknown> => ({
     font: { color: '#dce6f9', size: inModal ? 13 : 12, family: 'Inter, system-ui, sans-serif' },
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(12, 21, 34, 0.62)',
     margin: inModal
-        ? { l: 68, r: 30, t: 24, b: 112, pad: 8 }
+        ? { l: 72, r: 34, t: 44, b: 132, pad: 10 }
         : { l: 50, r: 16, t: 8, b: 90, pad: 6 },
     bargap: 0.22,
     barcornerradius: 10,
@@ -384,8 +503,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
             );
         }
 
-        const data = normalizeTracesForDisplay(chart.figureData);
-        const layout = stripPlotTitle(deepMerge(baseLayout(inModal), chart.figureLayout));
+        const data = normalizeTracesForDisplay(chart.figureData, inModal);
+        const mergedLayout = stripPlotTitle(deepMerge(baseLayout(inModal), chart.figureLayout));
+        const layout = applyYAxisHeadroomForLabels(mergedLayout, data, inModal);
         const hasLegend = data.length > 1 && data.some((trace) => typeof trace.name === 'string' && String(trace.name).trim().length > 0);
         layout.showlegend = hasLegend;
 
@@ -462,7 +582,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 w-full p-4 sm:p-7 min-h-0">
+                        <div className="flex-1 w-full px-4 sm:px-8 pt-8 sm:pt-10 pb-10 sm:pb-12 min-h-0">
                             {renderPlot(true)}
                         </div>
                     </div>
