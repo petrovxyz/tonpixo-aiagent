@@ -21,10 +21,11 @@
     "framer-motion": "^12.29.0",
     "motion": "^12.34.0",
     "next": "^16.1.6",
+    "plotly.js-basic-dist-min": "^3.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
-    "recharts": "^3.7.0",
+    "react-plotly.js": "^2.6.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0"
   },

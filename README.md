@@ -40,7 +40,7 @@ Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
 *   **Framework**: [Next.js 16](https://nextjs.org/) (App Router).
 *   **Language**: TypeScript.
 *   **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) & Vanilla CSS.
-*   **UI Components**: FontAwesome, Framer Motion (animations), Recharts (charts).
+*   **UI Components**: FontAwesome, Framer Motion (animations), Plotly (charts).
 *   **Integration**: Telegram Mini Apps SDK (`@tma.js/sdk`).
 
 ### Infrastructure (AWS)
