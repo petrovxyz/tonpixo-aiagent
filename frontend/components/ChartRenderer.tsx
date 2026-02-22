@@ -561,7 +561,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                     }}
                 >
                     <div
-                        className="relative w-full max-w-6xl h-[78dvh] sm:h-[74vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
+                        className="relative w-full max-w-6xl h-[70dvh] sm:h-[66vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
