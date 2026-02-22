@@ -265,37 +265,6 @@ def _normalize_chart_markdown(answer: str, question: str) -> str:
     return text
 
 
-def _extract_stream_text(content: Any) -> str:
-    """Extract plain text from provider-specific streamed chunk payloads."""
-    if not content:
-        return ""
-
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-                continue
-            if isinstance(block, dict):
-                block_type = str(block.get("type", "")).lower()
-                if block_type in {"text", "text_delta"}:
-                    parts.append(str(block.get("text", "") or block.get("delta", "")))
-                continue
-            if hasattr(block, "text") and isinstance(block.text, str):
-                parts.append(block.text)
-        return "".join(parts)
-
-    if isinstance(content, dict):
-        block_type = str(content.get("type", "")).lower()
-        if block_type in {"text", "text_delta"}:
-            return str(content.get("text", "") or content.get("delta", ""))
-
-    return ""
-
-
 def _trim_history_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
     trimmed: list[BaseMessage] = []
     for message in messages:
@@ -906,10 +875,25 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
             "final_answer": ""
         }
         
-        # Stream the agent execution with Langfuse callback and metadata.
-        # Emit token chunks immediately whenever the model is not in a tool run.
+        # Stream the agent execution with Langfuse callback and metadata
+        # 
+        # STRATEGY: Stream tokens in real-time with smart classification.
+        # 
+        # The challenge: We don't know if text after a tool_end is the final answer
+        # or just thinking before another tool call. 
+        # 
+        # Solution: Buffer text after each tool_end, and:
+        # - If another tool_start comes -> flush buffer as "thinking" events
+        # - When streaming ends -> flush remaining buffer as "token" (answer) events
+        # 
+        # For text BEFORE any tools -> it's initial thinking
+        # For text DURING tool execution -> it's thinking
+        # For text AFTER all tools -> it's the answer
+        
+        tools_used = False
         pending_tool_count = 0
-        answer_chunks: list[str] = []
+        # Buffer for text that might be thinking or might be answer
+        post_tool_buffer: list[str] = []
         
         async for event in agent.astream_events(
             initial_state, 
@@ -924,38 +908,63 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
             
             if kind == "on_chat_model_stream":
                 # Stream token-by-token output
-                chunk = event.get("data", {}).get("chunk")
-                content = getattr(chunk, "content", None) if chunk is not None else None
-                text_content = _extract_stream_text(content)
-
-                if not text_content:
-                    continue
-
-                if pending_tool_count > 0:
-                    # During tool execution, keep content as non-final "thinking" output.
-                    yield {"type": "thinking", "content": text_content}
-                    continue
-
-                answer_chunks.append(text_content)
-                yield {"type": "token", "content": text_content}
+                chunk = event["data"]["chunk"]
+                content = chunk.content
+                
+                # Handle different content formats from Claude
+                if content:
+                    text_content = ""
+                    
+                    # Content can be a string or a list of content blocks
+                    if isinstance(content, str):
+                        text_content = content
+                    elif isinstance(content, list):
+                        # Extract text from content blocks
+                        for block in content:
+                            if isinstance(block, str):
+                                text_content += block
+                            elif isinstance(block, dict) and block.get("type") == "text":
+                                text_content += block.get("text", "")
+                            elif hasattr(block, "text"):
+                                text_content += block.text
+                    
+                    if text_content:
+                        if not tools_used:
+                            # Before any tools - could be thinking or direct answer
+                            # Buffer it - will be classified at the end
+                            post_tool_buffer.append(text_content)
+                        elif pending_tool_count > 0:
+                            # Tool is running - this is definitely thinking/commentary
+                            yield {"type": "thinking", "content": text_content}
+                        else:
+                            # Tools are done but we don't know if more tools will come
+                            # Buffer this text until we know
+                            post_tool_buffer.append(text_content)
             
             elif kind == "on_tool_start":
-                # Tool is starting.
+                # Tool is starting - any buffered text was thinking!
+                tools_used = True
                 pending_tool_count += 1
-                tool_name = event.get("name", "tool")
+                tool_name = event["name"]
+                
+                # Flush buffer as thinking
+                for buffered_text in post_tool_buffer:
+                    yield {"type": "thinking", "content": buffered_text}
+                post_tool_buffer = []
+                
                 yield {"type": "tool_start", "tool": tool_name}
             
             elif kind == "on_tool_end":
                 # Tool finished
                 pending_tool_count = max(0, pending_tool_count - 1)
-                yield {"type": "tool_end", "tool": event.get("name", "tool")}
-
-        # Preserve chart markdown normalization for final persisted content.
-        if answer_chunks:
-            streamed_text = "".join(answer_chunks)
-            normalized_text = _normalize_chart_markdown(streamed_text, question_text)
-            if normalized_text != streamed_text:
-                yield {"type": "final", "content": normalized_text}
+                yield {"type": "tool_end", "tool": event["name"]}
+        
+        # Stream ended - flush remaining buffer
+        # If tools were used, buffer contains the final answer
+        # If no tools were used, buffer contains the entire response (is it answer? probably)
+        final_text = _normalize_chart_markdown("".join(post_tool_buffer), question_text)
+        if final_text:
+            yield {"type": "token", "content": final_text}
         
         # Yield trace_id if available - try different attributes
         trace_id = None

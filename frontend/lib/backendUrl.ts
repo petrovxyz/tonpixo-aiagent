@@ -84,17 +84,17 @@ export const getStreamUrl = (): string => {
     const runtimeStream = cleanUrl(runtimeConfig.streamUrl)
     if (runtimeStream) return runtimeStream
 
-    const mappedStream = getMappedStreamUrl(target)
-    if (mappedStream) return mappedStream
-
-    const publicStream = cleanUrl(process.env.NEXT_PUBLIC_STREAM_URL)
-    if (publicStream) return publicStream
-
     const runtimeApi = cleanUrl(runtimeConfig.apiUrl)
     if (runtimeApi) return runtimeApi
 
+    const mappedStream = getMappedStreamUrl(target)
+    if (mappedStream) return mappedStream
+
     const mappedApi = getMappedApiUrl(target)
     if (mappedApi) return mappedApi
+
+    const publicStream = cleanUrl(process.env.NEXT_PUBLIC_STREAM_URL)
+    if (publicStream) return publicStream
 
     const publicApi = cleanUrl(process.env.NEXT_PUBLIC_API_URL)
     if (publicApi) return publicApi

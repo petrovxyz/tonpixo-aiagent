@@ -520,17 +520,6 @@ async def chat_stream(request: ChatRequest):
                     # Stream individual tokens
                     data = json.dumps({"type": "token", "content": content})
                     yield f"data: {data}\n\n"
-
-                elif event_type == "final":
-                    # Final normalized answer text (for example chart fence normalization)
-                    content = event["content"]
-                    full_response = content
-                    data = json.dumps({"type": "final", "content": content})
-                    yield f"data: {data}\n\n"
-
-                elif event_type == "thinking":
-                    data = json.dumps({"type": "thinking", "content": event["content"]})
-                    yield f"data: {data}\n\n"
                 
                 elif event_type == "tool_start":
                     # Agent is using a tool
