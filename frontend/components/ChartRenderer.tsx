@@ -256,7 +256,7 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(12, 21, 34, 0.62)',
     margin: inModal
-        ? { l: 68, r: 30, t: 12, b: 100, pad: 8 }
+        ? { l: 68, r: 30, t: 24, b: 112, pad: 8 }
         : { l: 50, r: 16, t: 8, b: 90, pad: 6 },
     bargap: 0.22,
     barcornerradius: 10,
@@ -309,17 +309,8 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
 const baseConfig: Record<string, unknown> = {
     responsive: true,
     displaylogo: false,
+    displayModeBar: false,
     scrollZoom: false,
-    modeBarButtonsToRemove: [
-        'lasso2d',
-        'select2d',
-        'autoScale2d',
-        'zoomIn2d',
-        'zoomOut2d',
-        'hoverClosestCartesian',
-        'hoverCompareCartesian',
-        'toggleSpikelines',
-    ],
 };
 
 const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChart => {
@@ -381,7 +372,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
             <Plot
                 data={data as never[]}
                 layout={layout}
-                config={{ ...baseConfig, ...chart.figureConfig }}
+                config={{ ...chart.figureConfig, ...baseConfig }}
                 useResizeHandler
                 style={{ width: '100%', height: '100%' }}
                 className="w-full h-full"
@@ -429,7 +420,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                     }}
                 >
                     <div
-                        className="relative w-full max-w-6xl h-[88dvh] sm:h-[84vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
+                        className="relative w-full max-w-6xl h-[84dvh] sm:h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
@@ -450,7 +441,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 w-full p-2 sm:p-5 min-h-0">
+                        <div className="flex-1 w-full p-4 sm:p-7 min-h-0">
                             {renderPlot(true)}
                         </div>
                     </div>
