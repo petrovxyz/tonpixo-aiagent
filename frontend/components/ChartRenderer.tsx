@@ -401,7 +401,7 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
         automargin: true,
         title: {
             standoff: 14,
-            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+            font: { color: '#aebad0', size: inModal ? 14 : 13, weight: 700 },
         },
     },
     yaxis: {
@@ -414,7 +414,7 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
         nticks: inModal ? 8 : 7,
         title: {
             standoff: 12,
-            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+            font: { color: '#aebad0', size: inModal ? 14 : 13, weight: 700 },
         },
     },
     hoverlabel: {
