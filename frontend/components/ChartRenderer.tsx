@@ -401,7 +401,7 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
         automargin: true,
         title: {
             standoff: 14,
-            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+            font: { color: '#aebad0', size: inModal ? 14 : 13, weight: 700 },
         },
     },
     yaxis: {
@@ -414,7 +414,7 @@ const baseLayout = (inModal: boolean): Record<string, unknown> => ({
         nticks: inModal ? 8 : 7,
         title: {
             standoff: 12,
-            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+            font: { color: '#aebad0', size: inModal ? 14 : 13, weight: 700 },
         },
     },
     hoverlabel: {
@@ -523,7 +523,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
 
     return (
         <>
-            <div className="w-full my-7 py-7 sm:py-9 px-4 sm:px-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
+            <div className="w-full my-0 py-4 px-4 sm:px-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
                         <FontAwesomeIcon icon={faChartSimple} />
@@ -553,7 +553,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
 
             {isOpen && canUseDOM && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center px-3 py-14 bg-black/80 backdrop-blur-md"
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -561,7 +561,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                     }}
                 >
                     <div
-                        className="relative w-full max-w-6xl h-[84dvh] sm:h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
+                        className="relative w-full max-w-6xl h-[70dvh] sm:h-[66vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
@@ -582,7 +582,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 w-full px-4 sm:px-8 pt-8 sm:pt-10 pb-10 sm:pb-12 min-h-0">
+                        <div className="flex-1 w-full px-4 sm:px-8 pt-3 sm:pt-4 pb-4 sm:pb-5 min-h-0">
                             {renderPlot(true)}
                         </div>
                     </div>
