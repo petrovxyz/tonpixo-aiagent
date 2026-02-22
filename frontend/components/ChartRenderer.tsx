@@ -348,6 +348,27 @@ const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChar
     };
 };
 
+const chartTypeLabel = (value: string): string => {
+    const normalized = String(value || '').trim();
+    if (!normalized) {
+        return 'Chart';
+    }
+
+    const words = normalized
+        .replace(/[_-]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+    const base = words.join(' ');
+    if (!base) {
+        return 'Chart';
+    }
+    if (base.toLowerCase().endsWith(' chart')) {
+        return base;
+    }
+    return `${base} chart`;
+};
+
 export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
     const [isOpen, setIsOpen] = useState(false);
     const canUseDOM = typeof window !== 'undefined';
@@ -382,7 +403,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
 
     return (
         <>
-            <div className="w-full my-3 p-4 sm:p-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
+            <div className="w-full my-5 py-5 sm:py-6 px-4 sm:px-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
                         <FontAwesomeIcon icon={faChartSimple} />
@@ -391,8 +412,8 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                         <p className="text-[14px] font-semibold text-[var(--chart-card-text)] overflow-hidden text-ellipsis whitespace-nowrap">
                             {chart.title}
                         </p>
-                        <p className="text-[12px] text-white/65 capitalize overflow-hidden text-ellipsis whitespace-nowrap">
-                            {chart.chartType}
+                        <p className="text-[12px] text-white/65 overflow-hidden text-ellipsis whitespace-nowrap">
+                            {chartTypeLabel(chart.chartType)}
                         </p>
                     </div>
                 </div>
