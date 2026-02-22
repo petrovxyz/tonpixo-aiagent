@@ -179,10 +179,11 @@ def _int_config(name: str, default: int, min_value: int, max_value: int) -> int:
 
 
 def _prompt_mode() -> str:
-    mode = (get_config_value("AGENT_PROMPT_MODE", os.environ.get("AGENT_PROMPT_MODE", "lean")) or "lean").strip().lower()
-    if mode in {"full", "mcp", "mcp_full"}:
-        return "full"
-    return "lean"
+    # Default to MCP-backed prompt mode; lean remains opt-in.
+    mode = (get_config_value("AGENT_PROMPT_MODE", os.environ.get("AGENT_PROMPT_MODE", "full")) or "full").strip().lower()
+    if mode == "lean":
+        return "lean"
+    return "full"
 
 
 AGENT_RECURSION_LIMIT = _int_config("AGENT_RECURSION_LIMIT", 30, 4, 40)
@@ -464,28 +465,34 @@ def _build_resource_guidance() -> str:
 def _prefetch_mcp_system_prompt() -> str | None:
     """Fetch and cache MCP system prompt before any other MCP calls."""
     try:
-        return get_mcp_client().get_system_prompt_template()
+        # Force a fresh fetch so each agent run checks MCP prompt state first.
+        return get_mcp_client().get_system_prompt_template(ttl_seconds=0)
     except Exception as exc:
         print(f"Failed to prefetch MCP system prompt: {exc}")
         return None
 
 
 def build_system_prompt(job_id: str, address: str, prefetched_template: str | None = None) -> str:
-    """Build a cost-aware system prompt and inject runtime scope."""
+    """Build system prompt with MCP resource as primary source and inject runtime scope."""
     mode = _prompt_mode()
+    template = (prefetched_template or "").strip()
 
-    if mode == "full":
-        template = (prefetched_template or "").strip()
-        if not template:
-            mcp_client = get_mcp_client()
-            try:
-                template = mcp_client.get_system_prompt_template()
-            except Exception as exc:
-                # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
-                print(f"Falling back to built-in system prompt template: {exc}")
-                template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
-    else:
-        template = LEAN_SYSTEM_PROMPT_TEMPLATE
+    # Always attempt MCP prompt retrieval first, even when lean mode is configured.
+    if not template:
+        mcp_client = get_mcp_client()
+        try:
+            template = mcp_client.get_system_prompt_template(ttl_seconds=0).strip()
+        except Exception as exc:
+            print(f"Failed to fetch MCP system prompt in build step: {exc}")
+
+    if not template:
+        # Keep Lambda resilient if MCP resource endpoint is temporarily unavailable.
+        if mode == "lean":
+            template = LEAN_SYSTEM_PROMPT_TEMPLATE
+            print("Falling back to built-in lean system prompt template.")
+        else:
+            template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
+            print("Falling back to built-in full system prompt template.")
 
     rendered_template = template.replace("__JOB_ID__", job_id).replace("__ADDRESS__", address)
     return f"{rendered_template}\n\n{_build_resource_guidance()}"
@@ -876,12 +883,12 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
         # or just thinking before another tool call. 
         # 
         # Solution: Buffer text after each tool_end, and:
-        # - If another tool_start comes → flush buffer as "thinking" events
-        # - When streaming ends → flush remaining buffer as "token" (answer) events
+        # - If another tool_start comes -> flush buffer as "thinking" events
+        # - When streaming ends -> flush remaining buffer as "token" (answer) events
         # 
-        # For text BEFORE any tools → it's initial thinking
-        # For text DURING tool execution → it's thinking
-        # For text AFTER all tools → it's the answer
+        # For text BEFORE any tools -> it's initial thinking
+        # For text DURING tool execution -> it's thinking
+        # For text AFTER all tools -> it's the answer
         
         tools_used = False
         pending_tool_count = 0
