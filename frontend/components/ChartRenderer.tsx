@@ -1,30 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
-import {
-    BarChart,
-    Bar,
-    LineChart,
-    Line,
-    AreaChart,
-    Area,
-    PieChart,
-    Pie,
-    Cell,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    Legend,
-    ResponsiveContainer,
-} from 'recharts';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExpand, faTimes, faChartSimple } from '@fortawesome/free-solid-svg-icons';
 
-type ChartDatum = Record<string, number | string | null>;
+type Primitive = number | string | boolean | null;
+type ChartDatum = Record<string, Primitive>;
 
-interface ChartData {
+interface LegacyChartData {
     title?: string;
     type: 'bar' | 'line' | 'area' | 'pie';
     data: ChartDatum[];
@@ -32,233 +17,335 @@ interface ChartData {
     dataKeys: string[];
 }
 
-interface ChartRendererProps {
-    config: ChartData;
+interface PlotlyPayload {
+    format?: string;
+    title?: string;
+    figure?: {
+        data?: unknown[];
+        layout?: Record<string, unknown>;
+        frames?: unknown[];
+    };
+    config?: Record<string, unknown>;
+    meta?: Record<string, unknown>;
 }
 
+interface NormalizedChart {
+    title: string;
+    subtitle: string;
+    figureData: unknown[];
+    figureLayout: Record<string, unknown>;
+    figureConfig: Record<string, unknown>;
+}
+
+interface ChartRendererProps {
+    config: PlotlyPayload | LegacyChartData;
+}
+
+const Plot = dynamic(async () => {
+    const createPlotlyComponent = (await import('react-plotly.js/factory')).default;
+    const plotly = (await import('plotly.js-basic-dist-min')).default;
+    return createPlotlyComponent(plotly);
+}, { ssr: false });
+
 const CHART_SERIES_COLORS = [
-    'var(--chart-series-1)',
-    'var(--chart-series-2)',
-    'var(--chart-series-3)',
-    'var(--chart-series-4)',
-    'var(--chart-series-5)',
-    'var(--chart-series-6)',
+    '#2ea8ff',
+    '#ffbf47',
+    '#33d6a6',
+    '#ff6b8b',
+    '#9f8bff',
+    '#23d4ff',
 ];
 
-const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-});
-const INTEGER_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 0,
-});
-const DECIMAL_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 2,
-});
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const formatAxisValue = (value: number | string): string => {
-    const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric)) {
-        return String(value);
+const isLegacyChartData = (value: unknown): value is LegacyChartData => {
+    if (!isRecord(value)) {
+        return false;
     }
 
-    const abs = Math.abs(numeric);
-    if (abs >= 1000) {
-        return COMPACT_NUMBER_FORMATTER.format(numeric);
-    }
-    if (abs >= 1) {
-        return INTEGER_NUMBER_FORMATTER.format(numeric);
-    }
-    if (abs === 0) {
-        return '0';
-    }
-
-    return DECIMAL_NUMBER_FORMATTER.format(numeric);
+    return (
+        typeof value.type === 'string' &&
+        Array.isArray(value.data) &&
+        typeof value.xAxisKey === 'string' &&
+        Array.isArray(value.dataKeys)
+    );
 };
 
-const formatTooltipValue = (value: number | string): string => {
-    const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric)) {
-        return String(value);
+const toNumber = (value: Primitive): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
     }
-
-    return DECIMAL_NUMBER_FORMATTER.format(numeric);
+    if (typeof value === 'string') {
+        const compact = value.replaceAll(',', '').trim();
+        if (!compact) {
+            return 0;
+        }
+        const parsed = Number(compact);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof value === 'boolean') {
+        return value ? 1 : 0;
+    }
+    return 0;
 };
 
-const formatTooltipKey = (key: string | number | undefined): string =>
-    key === undefined ? '' : String(key).replaceAll('_', ' ');
+const humanize = (value: string): string => {
+    const compact = value.replaceAll('_', ' ').trim();
+    if (!compact) {
+        return 'Series';
+    }
+    return compact.charAt(0).toUpperCase() + compact.slice(1);
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+    const normalized = hex.replace('#', '');
+    if (normalized.length !== 6) {
+        return `rgba(46, 168, 255, ${alpha})`;
+    }
+
+    const r = Number.parseInt(normalized.slice(0, 2), 16);
+    const g = Number.parseInt(normalized.slice(2, 4), 16);
+    const b = Number.parseInt(normalized.slice(4, 6), 16);
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figureData' | 'figureLayout' | 'subtitle'> => {
+    const xValues = legacy.data.map((row) => row[legacy.xAxisKey]);
+    const subtitle = `${legacy.type.charAt(0).toUpperCase()}${legacy.type.slice(1)} chart`;
+
+    if (legacy.type === 'pie') {
+        const metric = legacy.dataKeys[0] ?? '';
+        const labels = xValues.map((value) => String(value ?? ''));
+        const values = legacy.data.map((row) => toNumber(row[metric] ?? 0));
+
+        return {
+            subtitle,
+            figureData: [
+                {
+                    type: 'pie',
+                    name: humanize(metric),
+                    labels,
+                    values,
+                    hole: 0.46,
+                    textinfo: 'percent+label',
+                    textposition: 'outside',
+                    marker: {
+                        colors: labels.map((_, index) => CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]),
+                        line: { color: 'rgba(21,28,40,0.95)', width: 1.25 },
+                    },
+                    hovertemplate: '%{label}<br>%{value:,.2f} (%{percent})<extra></extra>',
+                },
+            ],
+            figureLayout: {},
+        };
+    }
+
+    const figureData = legacy.dataKeys.map((key, index) => {
+        const color = CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+        const yValues = legacy.data.map((row) => toNumber(row[key] ?? 0));
+        const name = humanize(key);
+
+        if (legacy.type === 'bar') {
+            return {
+                type: 'bar',
+                name,
+                x: xValues,
+                y: yValues,
+                marker: { color },
+                opacity: 0.92,
+                hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
+            };
+        }
+
+        if (legacy.type === 'line') {
+            return {
+                type: 'scatter',
+                mode: 'lines+markers',
+                name,
+                x: xValues,
+                y: yValues,
+                line: { color, width: 2.8, shape: 'spline', smoothing: 0.45 },
+                marker: { color, size: 6, line: { color: 'rgba(21,28,40,0.95)', width: 1.2 } },
+                hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
+            };
+        }
+
+        return {
+            type: 'scatter',
+            mode: 'lines',
+            name,
+            x: xValues,
+            y: yValues,
+            line: { color, width: 2.6, shape: 'spline', smoothing: 0.35 },
+            stackgroup: 'tonpixo_area',
+            fill: index > 0 ? 'tonexty' : 'tozeroy',
+            fillcolor: hexToRgba(color, 0.18),
+            hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
+        };
+    });
+
+    return {
+        subtitle,
+        figureData,
+        figureLayout: {},
+    };
+};
+
+const baseLayout = (title: string, inModal: boolean): Record<string, unknown> => ({
+    title: {
+        text: title,
+        x: 0.02,
+        xanchor: 'left',
+        font: { color: '#f5f8ff', size: inModal ? 20 : 16, family: 'Inter, system-ui, sans-serif' },
+    },
+    font: { color: '#dce6f9', size: inModal ? 12 : 11, family: 'Inter, system-ui, sans-serif' },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(21,28,40,0.38)',
+    margin: inModal
+        ? { l: 56, r: 22, t: 72, b: 58, pad: 8 }
+        : { l: 42, r: 16, t: 52, b: 42, pad: 6 },
+    legend: {
+        orientation: 'h',
+        x: 0,
+        y: -0.2,
+        xanchor: 'left',
+        yanchor: 'top',
+        font: { color: '#dce6f9', size: 11 },
+    },
+    hovermode: 'x unified',
+    xaxis: {
+        tickfont: { color: '#aebad0', size: 11 },
+        showgrid: false,
+        zeroline: false,
+        showline: false,
+        automargin: true,
+        ticklabeloverflow: 'hide past div',
+    },
+    yaxis: {
+        tickfont: { color: '#aebad0', size: 11 },
+        gridcolor: 'rgba(174,186,208,0.22)',
+        zeroline: false,
+        automargin: true,
+        tickformat: ',~s',
+    },
+    hoverlabel: {
+        bgcolor: '#121925',
+        bordercolor: 'rgba(177,198,226,0.26)',
+        font: { color: '#f3f7ff', size: 12 },
+    },
+    autosize: true,
+});
+
+const baseConfig: Record<string, unknown> = {
+    responsive: true,
+    displaylogo: false,
+    scrollZoom: false,
+    modeBarButtonsToRemove: [
+        'lasso2d',
+        'select2d',
+        'autoScale2d',
+        'zoomIn2d',
+        'zoomOut2d',
+        'hoverClosestCartesian',
+        'hoverCompareCartesian',
+        'toggleSpikelines',
+    ],
+};
+
+const readTitleFromLayout = (layout: Record<string, unknown> | undefined): string => {
+    if (!layout) {
+        return '';
+    }
+    const rawTitle = layout.title;
+    if (typeof rawTitle === 'string') {
+        return rawTitle;
+    }
+    if (isRecord(rawTitle) && typeof rawTitle.text === 'string') {
+        return rawTitle.text;
+    }
+    return '';
+};
+
+const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChart => {
+    if (isLegacyChartData(config)) {
+        const legacyFigure = buildLegacyFigure(config);
+        return {
+            title: String(config.title || 'Data visualization'),
+            subtitle: legacyFigure.subtitle,
+            figureData: legacyFigure.figureData,
+            figureLayout: legacyFigure.figureLayout,
+            figureConfig: {},
+        };
+    }
+
+    const figure = isRecord(config.figure) ? config.figure : {};
+    const figureData = Array.isArray(figure.data) ? figure.data : [];
+    const figureLayout = isRecord(figure.layout) ? figure.layout : {};
+    const title =
+        String(config.title || '').trim() ||
+        readTitleFromLayout(figureLayout) ||
+        'Data visualization';
+
+    const chartType =
+        isRecord(config.meta) && typeof config.meta.chartType === 'string'
+            ? String(config.meta.chartType)
+            : 'Chart';
+
+    return {
+        title,
+        subtitle: `${chartType.charAt(0).toUpperCase()}${chartType.slice(1)} chart`,
+        figureData,
+        figureLayout,
+        figureConfig: isRecord(config.config) ? config.config : {},
+    };
+};
 
 export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
-    const { title, type, data, xAxisKey, dataKeys } = config;
     const [isOpen, setIsOpen] = useState(false);
     const canUseDOM = typeof window !== 'undefined';
 
-    const renderChart = (inModal: boolean = false) => {
-        const fontSize = inModal ? 12 : 10;
-        const axisColor = 'var(--chart-axis-color)';
-        const chartMargin = inModal
-            ? { top: 10, right: 16, left: 8, bottom: 0 }
-            : { top: 10, right: 12, left: 4, bottom: 0 };
+    const chart = useMemo(() => normalizeChart(config), [config]);
 
-        const commonGrid = <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid-color)" vertical={false} />;
-        const commonXAxis = (
-            <XAxis
-                dataKey={xAxisKey}
-                stroke={axisColor}
-                fontSize={fontSize}
-                tickLine={false}
-                axisLine={false}
-                tickMargin={10}
-                minTickGap={inModal ? 24 : 16}
-            />
-        );
-        const commonYAxis = (
-            <YAxis
-                stroke={axisColor}
-                fontSize={fontSize}
-                tickLine={false}
-                axisLine={false}
-                width={inModal ? 68 : 60}
-                tickMargin={8}
-                tickFormatter={(value) => formatAxisValue(value as number | string)}
-            />
-        );
-        const commonTooltip = (
-            <Tooltip
-                contentStyle={{
-                    backgroundColor: 'var(--chart-tooltip-bg)',
-                    border: '1px solid var(--chart-tooltip-border)',
-                    borderRadius: '12px',
-                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
-                    color: 'var(--chart-tooltip-text)',
-                }}
-                itemStyle={{ color: 'var(--chart-tooltip-text)' }}
-                labelStyle={{ color: 'var(--chart-tooltip-label)', fontWeight: 600 }}
-                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                formatter={(value, name) => [formatTooltipValue(value as number | string), formatTooltipKey(name)]}
-            />
-        );
-        const commonLegend = (
-            <Legend
-                wrapperStyle={{ paddingTop: '20px' }}
-                formatter={(value) => <span style={{ color: 'var(--chart-legend-text)' }}>{String(value)}</span>}
-            />
-        );
-
-        switch (type) {
-            case 'bar':
-                return (
-                    <BarChart data={data} margin={chartMargin}>
-                        {commonGrid}
-                        {commonXAxis}
-                        {commonYAxis}
-                        {commonTooltip}
-                        {commonLegend}
-                        {dataKeys.map((key, index) => (
-                            <Bar
-                                key={key}
-                                dataKey={key}
-                                fill={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]}
-                                radius={[4, 4, 0, 0]}
-                                animationDuration={1000}
-                            />
-                        ))}
-                    </BarChart>
-                );
-            case 'line':
-                return (
-                    <LineChart data={data} margin={chartMargin}>
-                        {commonGrid}
-                        {commonXAxis}
-                        {commonYAxis}
-                        {commonTooltip}
-                        {commonLegend}
-                        {dataKeys.map((key, index) => (
-                            <Line
-                                key={key}
-                                type="monotone"
-                                dataKey={key}
-                                stroke={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]}
-                                strokeWidth={3}
-                                dot={{ fill: 'var(--chart-modal-bg)', strokeWidth: 2, r: 4 }}
-                                activeDot={{ r: 6, strokeWidth: 0 }}
-                                animationDuration={1000}
-                            />
-                        ))}
-                    </LineChart>
-                );
-            case 'area':
-                return (
-                    <AreaChart data={data} margin={chartMargin}>
-                        <defs>
-                            {dataKeys.map((key, index) => (
-                                <linearGradient key={`color-${key}`} id={`color-${key}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]} stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]} stopOpacity={0} />
-                                </linearGradient>
-                            ))}
-                        </defs>
-                        {commonGrid}
-                        {commonXAxis}
-                        {commonYAxis}
-                        {commonTooltip}
-                        {commonLegend}
-                        {dataKeys.map((key, index) => (
-                            <Area
-                                key={key}
-                                type="monotone"
-                                dataKey={key}
-                                stroke={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]}
-                                fillOpacity={1}
-                                fill={`url(#color-${key})`}
-                                strokeWidth={3}
-                                animationDuration={1000}
-                            />
-                        ))}
-                    </AreaChart>
-                );
-            case 'pie':
-                return (
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={inModal ? 80 : 60}
-                            outerRadius={inModal ? 120 : 80}
-                            paddingAngle={5}
-                            dataKey={dataKeys[0]}
-                            nameKey={xAxisKey}
-                        >
-                            {data.map((entry, index) => (
-                                <Cell
-                                    key={`cell-${index}`}
-                                    fill={CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]}
-                                    stroke="rgba(0,0,0,0)"
-                                />
-                            ))}
-                        </Pie>
-                        {commonTooltip}
-                        {commonLegend}
-                    </PieChart>
-                );
-            default:
-                return <div className="text-white/60 text-center">Unsupported chart type: {type}</div>;
+    const renderPlot = (inModal: boolean) => {
+        if (!chart.figureData.length) {
+            return (
+                <div className="h-full flex items-center justify-center text-sm text-white/70 text-center px-4">
+                    Chart payload is empty.
+                </div>
+            );
         }
+
+        return (
+            <Plot
+                data={chart.figureData as never[]}
+                layout={{ ...baseLayout(chart.title, inModal), ...chart.figureLayout }}
+                config={{ ...baseConfig, ...chart.figureConfig }}
+                useResizeHandler
+                style={{ width: '100%', height: '100%' }}
+                className="w-full h-full"
+            />
+        );
     };
 
     return (
         <>
-            <div className="w-full my-3 p-4 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
+            <div className="w-full my-3 p-4 sm:p-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
                             <FontAwesomeIcon icon={faChartSimple} />
                         </div>
-                        <div>
-                            <p className="text-[14px] font-semibold text-[var(--chart-card-text)]">{type.charAt(0).toUpperCase() + type.slice(1)} Chart</p>
+                        <div className="min-w-0">
+                            <p className="text-[14px] font-semibold text-[var(--chart-card-text)] truncate">{chart.title}</p>
+                            <p className="text-[12px] text-white/70 truncate">{chart.subtitle}</p>
                         </div>
                     </div>
+                </div>
+
+                <div className="w-full h-[250px] sm:h-[300px] rounded-xl border border-white/8 overflow-hidden bg-[rgba(8,12,18,0.28)]">
+                    {renderPlot(false)}
                 </div>
 
                 <button
@@ -267,16 +354,16 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                         e.preventDefault();
                         setIsOpen(true);
                     }}
-                    className="w-full py-2.5 bg-[var(--chart-button-bg)] hover:bg-[var(--chart-button-bg-hover)] active:scale-[0.98] transition-all rounded-xl text-[var(--chart-button-text)] font-medium text-sm flex items-center justify-center gap-2 cursor-pointer"
+                    className="mt-4 w-full py-2.5 bg-[var(--chart-button-bg)] hover:bg-[var(--chart-button-bg-hover)] active:scale-[0.98] transition-all rounded-xl text-[var(--chart-button-text)] font-medium text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                     <FontAwesomeIcon icon={faExpand} />
-                    <span>Open</span>
+                    <span>Open Full Chart</span>
                 </button>
             </div>
 
             {isOpen && canUseDOM && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md"
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -284,13 +371,11 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                     }}
                 >
                     <div
-                        className="relative w-full max-w-5xl aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
+                        className="relative w-full max-w-6xl aspect-[16/11] sm:aspect-video rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between p-4 border-b border-[var(--chart-modal-divider)]">
-                            <div>
-                                <h2 className="text-[18px] font-bold ml-2 text-[var(--chart-title-color)]">{title || 'Data Visualization'}</h2>
-                            </div>
+                        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
+                            <h2 className="text-[16px] sm:text-[18px] font-bold text-[var(--chart-title-color)] truncate pr-3">{chart.title}</h2>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -303,10 +388,8 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 w-full p-6 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                                {renderChart(true)}
-                            </ResponsiveContainer>
+                        <div className="flex-1 w-full p-3 sm:p-6 min-h-0">
+                            {renderPlot(true)}
                         </div>
                     </div>
                 </div>,

@@ -228,8 +228,19 @@ def _looks_like_chart_payload(payload: str) -> bool:
     if not isinstance(parsed, dict):
         return False
 
-    required = {"type", "data", "xAxisKey", "dataKeys"}
-    return required.issubset(set(parsed.keys()))
+    figure = parsed.get("figure")
+    if isinstance(figure, dict):
+        if isinstance(figure.get("data"), list):
+            layout = figure.get("layout")
+            if layout is None or isinstance(layout, dict):
+                return True
+
+    if isinstance(parsed.get("data"), list) and isinstance(parsed.get("layout"), dict):
+        return True
+
+    # Backward compatibility for legacy recharts payloads.
+    legacy_required = {"type", "data", "xAxisKey", "dataKeys"}
+    return legacy_required.issubset(set(parsed.keys()))
 
 
 def _normalize_chart_markdown(answer: str, question: str) -> str:
