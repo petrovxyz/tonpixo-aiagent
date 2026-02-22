@@ -8,6 +8,7 @@ import { faExpand, faTimes, faChartSimple } from '@fortawesome/free-solid-svg-ic
 
 type Primitive = number | string | boolean | null;
 type ChartDatum = Record<string, Primitive>;
+type PlotlyTrace = Record<string, unknown>;
 
 interface LegacyChartData {
     title?: string;
@@ -31,8 +32,8 @@ interface PlotlyPayload {
 
 interface NormalizedChart {
     title: string;
-    subtitle: string;
-    figureData: unknown[];
+    chartType: string;
+    figureData: PlotlyTrace[];
     figureLayout: Record<string, unknown>;
     figureConfig: Record<string, unknown>;
 }
@@ -48,12 +49,12 @@ const Plot = dynamic(async () => {
 }, { ssr: false });
 
 const CHART_SERIES_COLORS = [
-    '#2ea8ff',
-    '#ffbf47',
-    '#33d6a6',
-    '#ff6b8b',
-    '#9f8bff',
-    '#23d4ff',
+    '#4cb8ff',
+    '#67dcb0',
+    '#ffcb6b',
+    '#ff8faa',
+    '#a4b2ff',
+    '#66e5ff',
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -101,7 +102,7 @@ const humanize = (value: string): string => {
 const hexToRgba = (hex: string, alpha: number): string => {
     const normalized = hex.replace('#', '');
     if (normalized.length !== 6) {
-        return `rgba(46, 168, 255, ${alpha})`;
+        return `rgba(76, 184, 255, ${alpha})`;
     }
 
     const r = Number.parseInt(normalized.slice(0, 2), 16);
@@ -111,9 +112,46 @@ const hexToRgba = (hex: string, alpha: number): string => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figureData' | 'figureLayout' | 'subtitle'> => {
+const deepMerge = (
+    base: Record<string, unknown>,
+    override: Record<string, unknown>,
+): Record<string, unknown> => {
+    const merged: Record<string, unknown> = { ...base };
+
+    for (const [key, value] of Object.entries(override)) {
+        const existing = merged[key];
+        if (isRecord(existing) && isRecord(value)) {
+            merged[key] = deepMerge(existing, value);
+            continue;
+        }
+        merged[key] = value;
+    }
+
+    return merged;
+};
+
+const readTitleFromLayout = (layout: Record<string, unknown> | undefined): string => {
+    if (!layout) {
+        return '';
+    }
+    const rawTitle = layout.title;
+    if (typeof rawTitle === 'string') {
+        return rawTitle;
+    }
+    if (isRecord(rawTitle) && typeof rawTitle.text === 'string') {
+        return rawTitle.text;
+    }
+    return '';
+};
+
+const stripPlotTitle = (layout: Record<string, unknown>): Record<string, unknown> => {
+    const next = { ...layout };
+    next.title = { text: '' };
+    return next;
+};
+
+const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figureData' | 'figureLayout'> => {
     const xValues = legacy.data.map((row) => row[legacy.xAxisKey]);
-    const subtitle = `${legacy.type.charAt(0).toUpperCase()}${legacy.type.slice(1)} chart`;
 
     if (legacy.type === 'pie') {
         const metric = legacy.dataKeys[0] ?? '';
@@ -121,19 +159,18 @@ const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figu
         const values = legacy.data.map((row) => toNumber(row[metric] ?? 0));
 
         return {
-            subtitle,
             figureData: [
                 {
                     type: 'pie',
                     name: humanize(metric),
                     labels,
                     values,
-                    hole: 0.46,
+                    hole: 0.44,
                     textinfo: 'percent+label',
                     textposition: 'outside',
                     marker: {
                         colors: labels.map((_, index) => CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]),
-                        line: { color: 'rgba(21,28,40,0.95)', width: 1.25 },
+                        line: { color: 'rgba(17, 35, 61, 0.95)', width: 1.3 },
                     },
                     hovertemplate: '%{label}<br>%{value:,.2f} (%{percent})<extra></extra>',
                 },
@@ -153,8 +190,8 @@ const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figu
                 name,
                 x: xValues,
                 y: yValues,
-                marker: { color },
-                opacity: 0.92,
+                marker: { color, line: { width: 0 }, cornerradius: 10 },
+                opacity: 0.95,
                 hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
             };
         }
@@ -166,8 +203,8 @@ const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figu
                 name,
                 x: xValues,
                 y: yValues,
-                line: { color, width: 2.8, shape: 'spline', smoothing: 0.45 },
-                marker: { color, size: 6, line: { color: 'rgba(21,28,40,0.95)', width: 1.2 } },
+                line: { color, width: 3, shape: 'spline', smoothing: 0.45 },
+                marker: { color, size: 6, line: { color: 'rgba(17,35,61,0.95)', width: 1.2 } },
                 hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
             };
         }
@@ -178,34 +215,53 @@ const buildLegacyFigure = (legacy: LegacyChartData): Pick<NormalizedChart, 'figu
             name,
             x: xValues,
             y: yValues,
-            line: { color, width: 2.6, shape: 'spline', smoothing: 0.35 },
+            line: { color, width: 2.8, shape: 'spline', smoothing: 0.35 },
             stackgroup: 'tonpixo_area',
             fill: index > 0 ? 'tonexty' : 'tozeroy',
-            fillcolor: hexToRgba(color, 0.18),
+            fillcolor: hexToRgba(color, 0.2),
             hovertemplate: `%{x}<br>${name}: %{y:,.2f}<extra></extra>`,
         };
     });
 
     return {
-        subtitle,
         figureData,
         figureLayout: {},
     };
 };
 
-const baseLayout = (title: string, inModal: boolean): Record<string, unknown> => ({
-    title: {
-        text: title,
-        x: 0.02,
-        xanchor: 'left',
-        font: { color: '#f5f8ff', size: inModal ? 20 : 16, family: 'Inter, system-ui, sans-serif' },
-    },
-    font: { color: '#dce6f9', size: inModal ? 12 : 11, family: 'Inter, system-ui, sans-serif' },
+const normalizeTracesForDisplay = (input: PlotlyTrace[]): PlotlyTrace[] =>
+    input.map((trace, index) => {
+        if (!isRecord(trace)) {
+            return trace;
+        }
+
+        const next: PlotlyTrace = { ...trace };
+        const traceType = String(trace.type || '').toLowerCase();
+        const color = CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+
+        if (traceType === 'bar') {
+            const marker = isRecord(trace.marker) ? { ...trace.marker } : {};
+            marker.color = marker.color ?? color;
+            marker.line = isRecord(marker.line) ? { ...marker.line, width: 0 } : { width: 0 };
+            marker.cornerradius = marker.cornerradius ?? 10;
+            next.marker = marker;
+            next.opacity = next.opacity ?? 0.95;
+        }
+
+        return next;
+    });
+
+const baseLayout = (inModal: boolean): Record<string, unknown> => ({
+    font: { color: '#dce6f9', size: inModal ? 13 : 12, family: 'Inter, system-ui, sans-serif' },
     paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(21,28,40,0.38)',
+    plot_bgcolor: 'rgba(12, 21, 34, 0.62)',
     margin: inModal
-        ? { l: 56, r: 22, t: 72, b: 58, pad: 8 }
-        : { l: 42, r: 16, t: 52, b: 42, pad: 6 },
+        ? { l: 68, r: 30, t: 12, b: 100, pad: 8 }
+        : { l: 50, r: 16, t: 8, b: 90, pad: 6 },
+    bargap: 0.22,
+    barcornerradius: 10,
+    hovermode: 'x unified',
+    showlegend: false,
     legend: {
         orientation: 'h',
         x: 0,
@@ -214,26 +270,38 @@ const baseLayout = (title: string, inModal: boolean): Record<string, unknown> =>
         yanchor: 'top',
         font: { color: '#dce6f9', size: 11 },
     },
-    hovermode: 'x unified',
     xaxis: {
-        tickfont: { color: '#aebad0', size: 11 },
+        type: 'category',
+        tickfont: { color: '#c7d4eb', size: inModal ? 12 : 11 },
         showgrid: false,
         zeroline: false,
         showline: false,
+        tickangle: inModal ? -24 : -34,
+        ticklabeloverflow: 'allow',
+        nticks: inModal ? 12 : 8,
         automargin: true,
-        ticklabeloverflow: 'hide past div',
+        title: {
+            standoff: 14,
+            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+        },
     },
     yaxis: {
-        tickfont: { color: '#aebad0', size: 11 },
-        gridcolor: 'rgba(174,186,208,0.22)',
+        tickfont: { color: '#c7d4eb', size: inModal ? 12 : 11 },
+        gridcolor: 'rgba(177,198,226,0.20)',
+        gridwidth: 1,
         zeroline: false,
         automargin: true,
         tickformat: ',~s',
+        nticks: inModal ? 8 : 7,
+        title: {
+            standoff: 12,
+            font: { color: '#aebad0', size: inModal ? 12 : 11 },
+        },
     },
     hoverlabel: {
         bgcolor: '#121925',
-        bordercolor: 'rgba(177,198,226,0.26)',
-        font: { color: '#f3f7ff', size: 12 },
+        bordercolor: 'rgba(177,198,226,0.32)',
+        font: { color: '#f3f7ff', size: inModal ? 12 : 11 },
     },
     autosize: true,
 });
@@ -254,26 +322,12 @@ const baseConfig: Record<string, unknown> = {
     ],
 };
 
-const readTitleFromLayout = (layout: Record<string, unknown> | undefined): string => {
-    if (!layout) {
-        return '';
-    }
-    const rawTitle = layout.title;
-    if (typeof rawTitle === 'string') {
-        return rawTitle;
-    }
-    if (isRecord(rawTitle) && typeof rawTitle.text === 'string') {
-        return rawTitle.text;
-    }
-    return '';
-};
-
 const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChart => {
     if (isLegacyChartData(config)) {
         const legacyFigure = buildLegacyFigure(config);
         return {
             title: String(config.title || 'Data visualization'),
-            subtitle: legacyFigure.subtitle,
+            chartType: config.type,
             figureData: legacyFigure.figureData,
             figureLayout: legacyFigure.figureLayout,
             figureConfig: {},
@@ -281,7 +335,8 @@ const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChar
     }
 
     const figure = isRecord(config.figure) ? config.figure : {};
-    const figureData = Array.isArray(figure.data) ? figure.data : [];
+    const rawFigureData = Array.isArray(figure.data) ? figure.data : [];
+    const figureData = rawFigureData.filter((trace): trace is PlotlyTrace => isRecord(trace));
     const figureLayout = isRecord(figure.layout) ? figure.layout : {};
     const title =
         String(config.title || '').trim() ||
@@ -291,11 +346,11 @@ const normalizeChart = (config: PlotlyPayload | LegacyChartData): NormalizedChar
     const chartType =
         isRecord(config.meta) && typeof config.meta.chartType === 'string'
             ? String(config.meta.chartType)
-            : 'Chart';
+            : 'chart';
 
     return {
         title,
-        subtitle: `${chartType.charAt(0).toUpperCase()}${chartType.slice(1)} chart`,
+        chartType,
         figureData,
         figureLayout,
         figureConfig: isRecord(config.config) ? config.config : {},
@@ -317,10 +372,15 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
             );
         }
 
+        const data = normalizeTracesForDisplay(chart.figureData);
+        const layout = stripPlotTitle(deepMerge(baseLayout(inModal), chart.figureLayout));
+        const hasLegend = data.length > 1 && data.some((trace) => typeof trace.name === 'string' && String(trace.name).trim().length > 0);
+        layout.showlegend = hasLegend;
+
         return (
             <Plot
-                data={chart.figureData as never[]}
-                layout={{ ...baseLayout(chart.title, inModal), ...chart.figureLayout }}
+                data={data as never[]}
+                layout={layout}
                 config={{ ...baseConfig, ...chart.figureConfig }}
                 useResizeHandler
                 style={{ width: '100%', height: '100%' }}
@@ -332,20 +392,18 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
     return (
         <>
             <div className="w-full my-3 p-4 sm:p-5 rounded-2xl border font-sans bg-[var(--chart-card-bg)] border-[var(--chart-card-border)]">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
-                            <FontAwesomeIcon icon={faChartSimple} />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[14px] font-semibold text-[var(--chart-card-text)] truncate">{chart.title}</p>
-                            <p className="text-[12px] text-white/70 truncate">{chart.subtitle}</p>
-                        </div>
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-[var(--chart-icon-bg)] flex items-center justify-center text-[var(--chart-card-text)] shrink-0">
+                        <FontAwesomeIcon icon={faChartSimple} />
                     </div>
-                </div>
-
-                <div className="w-full h-[250px] sm:h-[300px] rounded-xl border border-white/8 overflow-hidden bg-[rgba(8,12,18,0.28)]">
-                    {renderPlot(false)}
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-semibold text-[var(--chart-card-text)] overflow-hidden text-ellipsis whitespace-nowrap">
+                            {chart.title}
+                        </p>
+                        <p className="text-[12px] text-white/65 capitalize overflow-hidden text-ellipsis whitespace-nowrap">
+                            {chart.chartType}
+                        </p>
+                    </div>
                 </div>
 
                 <button
@@ -354,16 +412,16 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                         e.preventDefault();
                         setIsOpen(true);
                     }}
-                    className="mt-4 w-full py-2.5 bg-[var(--chart-button-bg)] hover:bg-[var(--chart-button-bg-hover)] active:scale-[0.98] transition-all rounded-xl text-[var(--chart-button-text)] font-medium text-sm flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-2.5 bg-[var(--chart-button-bg)] hover:bg-[var(--chart-button-bg-hover)] active:scale-[0.98] transition-all rounded-xl text-[var(--chart-button-text)] font-medium text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                     <FontAwesomeIcon icon={faExpand} />
-                    <span>Open Full Chart</span>
+                    <span>Open chart</span>
                 </button>
             </div>
 
             {isOpen && canUseDOM && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md"
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -371,11 +429,15 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                     }}
                 >
                     <div
-                        className="relative w-full max-w-6xl aspect-[16/11] sm:aspect-video rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
+                        className="relative w-full max-w-6xl h-[88dvh] sm:h-[84vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border font-sans bg-[var(--chart-modal-bg)] border-[var(--chart-modal-border)]"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
-                            <h2 className="text-[16px] sm:text-[18px] font-bold text-[var(--chart-title-color)] truncate pr-3">{chart.title}</h2>
+                        <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--chart-modal-divider)]">
+                            <div className="min-w-0 flex-1">
+                                <h2 className="text-[16px] sm:text-[18px] font-bold text-[var(--chart-title-color)] overflow-hidden text-ellipsis whitespace-nowrap">
+                                    {chart.title}
+                                </h2>
+                            </div>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -388,7 +450,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ config }) => {
                             </button>
                         </div>
 
-                        <div className="flex-1 w-full p-3 sm:p-6 min-h-0">
+                        <div className="flex-1 w-full p-2 sm:p-5 min-h-0">
                             {renderPlot(true)}
                         </div>
                     </div>
