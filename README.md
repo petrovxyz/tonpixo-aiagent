@@ -4,6 +4,8 @@ Tonpixo is an advanced, autonomous and serverless AI agent that transforms natur
 
 Built during [TON x AWS AI-Powered Hack](https://t.me/tonushub/44).
 
+Winner of the [TON AI Agent Hackathon](https://identityhub.app/contests/ai-hackathon), User-Facing Agents track.
+
 > Current architecture split:
 > - `tonpixo-aiagent` (this repo) keeps the LangGraph + Bedrock orchestration brain in AWS Lambda.
 > - `tonpixo-mcp` (separate sibling repo) runs as external MCP tool/prompt server.
