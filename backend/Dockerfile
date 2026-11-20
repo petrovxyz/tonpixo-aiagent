@@ -1,13 +1,14 @@
 # AWS Lambda Web Adapter for FastAPI Streaming
 # Using regular Python image with Lambda Web Adapter extension
-FROM public.ecr.aws/docker/library/python:3.11-slim-bullseye
+# Debian 13 (trixie): bullseye-security packages started returning 404 in Nov 2026.
+FROM public.ecr.aws/docker/library/python:3.11-slim-trixie
 
 # Install Lambda Web Adapter extension for response streaming
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Install system dependencies for matplotlib and build tools
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -16,8 +17,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Copy function code
 COPY *.py ./
