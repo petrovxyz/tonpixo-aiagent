@@ -16,5 +16,5 @@ langchain-experimental
 langgraph
 tabulate
 botocore
-langfuse
+langfuse==5.2.0
 awswrangler
