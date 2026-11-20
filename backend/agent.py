@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langfuse import Langfuse
+from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 
 if TYPE_CHECKING:
@@ -32,12 +32,18 @@ BEDROCK_RETRY_CONFIG = Config(
 bedrock_runtime = boto3.client('bedrock-runtime', config=BEDROCK_RETRY_CONFIG)
 dynamodb = boto3.resource('dynamodb')
 
-# Initialize Langfuse client (uses environment variables)
-# LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_HOST
+# Langfuse Python SDK v5 (OpenTelemetry based; needs langchain-core>=1).
+# SDK v3 relied on the legacy batch ingestion API, which Langfuse Cloud removed on 2026-11-16.
+# Keys come from Secrets Manager (falling back to env vars); the environment comes from
+# LANGFUSE_TRACING_ENVIRONMENT, which template.yaml sets to the stack name (e.g. tonpixo-main).
+LANGFUSE_PUBLIC_KEY = get_config_value("LANGFUSE_PUBLIC_KEY")
+LANGFUSE_ENVIRONMENT = get_config_value("LANGFUSE_TRACING_ENVIRONMENT") or None
+
 langfuse = Langfuse(
-    public_key=get_config_value("LANGFUSE_PUBLIC_KEY"),
+    public_key=LANGFUSE_PUBLIC_KEY,
     secret_key=get_config_value("LANGFUSE_SECRET_KEY"),
-    host=get_config_value("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    base_url=get_config_value("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+    environment=LANGFUSE_ENVIRONMENT,
 )
 
 _mcp_events_ctx: ContextVar[list[dict[str, Any]] | None] = ContextVar("mcp_events_ctx", default=None)
@@ -56,53 +62,24 @@ def _emit_langfuse_event(
     job_id: str,
     user_id: str | None = None,
 ) -> bool:
-    event_fn = getattr(langfuse, "create_event", None) or getattr(langfuse, "event", None)
-    if not callable(event_fn):
+    """Log an event; attach it to the agent trace when trace_id is known."""
+    try:
+        with propagate_attributes(
+            session_id=job_id or None,
+            user_id=str(user_id) if user_id else None,
+        ):
+            if trace_id:
+                langfuse.create_event(
+                    trace_context={"trace_id": trace_id},
+                    name=event_name,
+                    metadata=metadata,
+                )
+            else:
+                langfuse.create_event(name=event_name, metadata=metadata)
+        return True
+    except Exception as exc:
+        print(f"Failed to log MCP event to Langfuse: {exc}")
         return False
-
-    attempts = [
-        {
-            "name": event_name,
-            "metadata": metadata,
-            "trace_id": trace_id,
-            "session_id": job_id,
-            "user_id": user_id,
-        },
-        {
-            "name": event_name,
-            "metadata": metadata,
-            "trace_id": trace_id,
-            "session_id": job_id,
-        },
-        {
-            "name": event_name,
-            "metadata": metadata,
-            "session_id": job_id,
-            "user_id": user_id,
-        },
-        {
-            "name": event_name,
-            "metadata": metadata,
-            "session_id": job_id,
-        },
-        {
-            "name": event_name,
-            "metadata": metadata,
-        },
-    ]
-
-    for candidate in attempts:
-        kwargs = {k: v for k, v in candidate.items() if v is not None and v != ""}
-        try:
-            event_fn(**kwargs)
-            return True
-        except TypeError:
-            continue
-        except Exception as exc:
-            print(f"Failed to log MCP event to Langfuse: {exc}")
-            return False
-
-    return False
 
 
 def _flush_mcp_events_to_langfuse(
@@ -356,10 +333,15 @@ def _load_chat_history(chat_id: str | None, question: str) -> list[BaseMessage]:
 def create_langfuse_handler() -> LangfuseCallbackHandler:
     """
     Create a Langfuse callback handler for tracing LLM calls.
-    Note: In Langfuse v3, trace attributes (user_id, session_id, tags) are passed
-    via metadata in the invoke config, not in the handler constructor.
+    Trace attributes (user_id, session_id, tags) are passed via the
+    langfuse_* keys of the invoke config metadata, not the constructor.
     """
-    return LangfuseCallbackHandler()
+    return LangfuseCallbackHandler(public_key=LANGFUSE_PUBLIC_KEY)
+
+
+def get_langfuse_trace_id(handler: LangfuseCallbackHandler | None) -> str | None:
+    """Return the trace id of the last root run the handler finished."""
+    return getattr(handler, "last_trace_id", None) or None
 
 
 def get_langfuse_metadata(job_id: str, user_id: str = None) -> dict:
@@ -799,17 +781,7 @@ def process_chat(job_id: str, question: str, user_id: str = None, chat_id: str =
             }
         )
         
-        # Flush Langfuse to ensure traces are sent (important for Lambda)
-        flush_langfuse()
-        
-        # Get trace_id from handler if available - use last_trace_id first (Langfuse v3)
-        trace_id = None
-        if hasattr(langfuse_handler, "last_trace_id") and langfuse_handler.last_trace_id:
-            trace_id = langfuse_handler.last_trace_id
-        elif hasattr(langfuse_handler, "get_trace_id"):
-            trace_id = langfuse_handler.get_trace_id()
-        elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
-            trace_id = langfuse_handler.trace.id
+        trace_id = get_langfuse_trace_id(langfuse_handler)
         
         # Extract final answer from the last AI message
         answer = "I couldn't generate a response."
@@ -828,6 +800,8 @@ def process_chat(job_id: str, question: str, user_id: str = None, chat_id: str =
             trace_id=trace_id,
             user_id=user_id,
         )
+        # Flush before returning: Lambda may freeze the process right after the response.
+        flush_langfuse()
 
         return {"content": answer, "trace_id": trace_id}
 
@@ -977,26 +951,10 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
         if final_text:
             yield {"type": "token", "content": final_text}
         
-        # Yield trace_id if available - try different attributes
-        trace_id = None
-        print(f"[STREAM] Attempting to get trace_id from handler")
-        
-        # In Langfuse v3, use last_trace_id (documented attribute)
-        if hasattr(langfuse_handler, "last_trace_id") and langfuse_handler.last_trace_id:
-            trace_id = langfuse_handler.last_trace_id
-            print(f"[STREAM] Got trace_id from last_trace_id: {trace_id}")
-        elif hasattr(langfuse_handler, "get_trace_id"):
-            trace_id = langfuse_handler.get_trace_id()
-            print(f"[STREAM] Got trace_id from get_trace_id(): {trace_id}")
-        elif hasattr(langfuse_handler, "trace") and langfuse_handler.trace:
-            trace_id = langfuse_handler.trace.id
-            print(f"[STREAM] Got trace_id from trace.id: {trace_id}")
-        elif hasattr(langfuse_handler, "trace_id") and langfuse_handler.trace_id:
-            trace_id = langfuse_handler.trace_id
-            print(f"[STREAM] Got trace_id from trace_id attr: {trace_id}")
-        else:
-            print(f"[STREAM] Could not find trace_id - handler has: {[a for a in dir(langfuse_handler) if 'trace' in a.lower()]}")
-             
+        trace_id = get_langfuse_trace_id(langfuse_handler)
+        if not trace_id:
+            print("[STREAM] Langfuse handler did not report a trace_id")
+
         if trace_id:
             _flush_mcp_events_to_langfuse(
                 events=mcp_events,
@@ -1032,6 +990,8 @@ async def process_chat_stream(job_id: str, question: str, user_id: str = None, c
         flush_langfuse()
         yield {"type": "error", "content": f"I encountered an error: {str(e)}"}
     finally:
+        # Also covers a client disconnect (GeneratorExit/CancelledError skip the except above).
+        flush_langfuse()
         _mcp_events_ctx.reset(mcp_events_token)
 
 
